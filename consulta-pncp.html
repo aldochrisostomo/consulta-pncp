@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consulta PNCP — Licitações, Contratos e Atas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F2F4F1; --card:#FFFFFF; --ink:#15282F; --ink-soft:#4A5E66;
+    --line:#D8DEDA; --green:#1F7A5C; --green-dark:#155843;
+    --amber:#B97E14; --red:#A93226;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'Archivo',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans)}
+  input,select,button{font-family:var(--sans);font-size:14px;color:var(--ink)}
+  input,select{padding:8px 10px;border:1.5px solid var(--line);border-radius:6px;background:#fff}
+  input:disabled{background:#EEF1EE;color:#9AA8A2;cursor:not-allowed}
+  input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+  @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+
+  header{border-bottom:3px solid var(--ink);background:var(--card)}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+  header .wrap{padding-top:22px;padding-bottom:0}
+  h1{margin:0;font-size:26px;font-weight:800;letter-spacing:-.5px;display:inline}
+  .sub{font-family:var(--mono);font-size:12px;color:var(--ink-soft);margin-left:12px}
+
+  nav{display:flex;gap:4px;margin-top:16px}
+  nav button{padding:8px 16px;font-weight:600;border:1.5px solid var(--line);background:transparent;
+    color:var(--ink-soft);border-radius:6px 6px 0 0;margin-bottom:-2px;cursor:pointer}
+  nav button.ativa{border-color:var(--ink);border-bottom-color:var(--card);background:var(--card);color:var(--ink)}
+
+  main{padding:20px 0 40px}
+  .filtros{background:var(--card);border:1.5px solid var(--line);border-radius:8px;padding:16px;
+    display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+  .campo{display:flex;flex-direction:column;gap:4px}
+  .campo span{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft)}
+  .campo small{font-size:10.5px;color:var(--ink-soft);font-weight:400}
+
+  /* Lista suspensa com busca (órgão e unidade) */
+  .combo{position:relative}
+  .combo input{width:100%;padding-right:28px}
+  .combo .limpar{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:none;
+    color:var(--ink-soft);font-size:13px;cursor:pointer;padding:2px;display:none;line-height:1}
+  .combo.selecionado .limpar{display:block}
+  .combo.selecionado input{border-color:var(--green);color:var(--green-dark);font-weight:600}
+  .combo-lista{position:absolute;z-index:20;top:calc(100% + 4px);left:0;min-width:100%;width:max-content;max-width:420px;
+    max-height:260px;overflow:auto;background:#fff;border:1.5px solid var(--ink);border-radius:6px;
+    box-shadow:0 6px 18px rgba(21,40,47,.15);display:none}
+  .combo-lista.aberta{display:block}
+  .combo-item{padding:8px 10px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .combo-item:last-child{border-bottom:none}
+  .combo-item:hover{background:var(--paper)}
+  .combo-item .cnpj{font-family:var(--mono);font-size:11px;color:var(--ink-soft);display:block;margin-top:2px}
+  .combo-dica{padding:10px;font-size:12px;color:var(--ink-soft);max-width:320px}
+  #btnBuscar{padding:9px 22px;font-weight:600;background:var(--green);color:#fff;border:none;border-radius:6px;cursor:pointer}
+  #btnBuscar:disabled{background:var(--ink-soft);cursor:wait}
+
+  .resumo{font-family:var(--mono);font-size:12.5px;color:var(--ink-soft);margin:14px 2px 12px}
+  #totalizador{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0 4px}
+  .tot-card{flex:1;min-width:150px;background:var(--card);border:1.5px solid var(--line);
+    border-radius:8px;padding:12px 14px}
+  .tot-card .rotulo{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft)}
+  .tot-card .valor-tot{font-family:var(--mono);font-size:19px;font-weight:600;color:var(--green-dark);margin-top:4px}
+  .erro{background:#FBEFED;border:1.5px solid var(--red);border-radius:8px;padding:12px 16px;font-size:14px;color:var(--red);margin-top:16px}
+  .vazio{border:1.5px dashed var(--line);border-radius:8px;padding:28px;text-align:center;color:var(--ink-soft);font-size:14px;background:var(--card);margin-top:8px}
+
+  .lista{display:flex;flex-direction:column;gap:10px}
+  article{background:var(--card);border:1.5px solid var(--line);border-radius:8px;display:flex;overflow:hidden}
+  .canhoto{border-right:2px dashed var(--line);background:var(--paper);padding:12px 10px;display:flex;align-items:center;min-width:34px}
+  .canhoto span{font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--ink-soft);
+    writing-mode:vertical-rl;transform:rotate(180deg);letter-spacing:.05em}
+  .corpo{padding:14px 16px;flex:1;display:flex;flex-direction:column;gap:8px}
+  .tags{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .tag{font-family:var(--mono);font-size:11px;font-weight:600;border:1px solid var(--green);color:var(--green);
+    border-radius:4px;padding:2px 7px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+  .tag.ambar{border-color:var(--amber);color:var(--amber)}
+  .tag.cinza{border-color:var(--ink-soft);color:var(--ink-soft)}
+  .objeto{margin:0;font-size:14.5px;line-height:1.45;font-weight:500}
+  .detalhes{display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--ink-soft)}
+  .detalhes b{color:var(--ink)}
+  .rodape-card{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-top:2px}
+  .valor{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--green-dark)}
+  .link-pncp{font-size:13px;font-weight:600;color:var(--green);text-decoration:none;border-bottom:1.5px solid var(--green)}
+
+  .paginacao{display:flex;gap:8px;justify-content:center;margin:20px 0}
+  .paginacao button{padding:8px 18px;font-weight:600;background:#fff;border:1.5px solid var(--ink);border-radius:6px;cursor:pointer}
+  .paginacao button:disabled{color:var(--line);border-color:var(--line);background:var(--paper);cursor:default}
+
+  footer{margin-top:32px;padding-top:12px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:11.5px;color:var(--ink-soft)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>Consulta PNCP</h1>
+    <span class="sub">Portal Nacional de Contratações Públicas · dados abertos</span>
+    <nav id="abas" aria-label="Tipo de consulta"></nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="filtros" aria-label="Filtros">
+    <label class="campo"><span>De</span><input type="date" id="fDataIni"></label>
+    <label class="campo"><span>Até</span><input type="date" id="fDataFim"></label>
+
+    <label class="campo" id="campoModalidade"><span>Modalidade</span>
+      <select id="fModalidade"></select>
+    </label>
+
+    <label class="campo" id="campoUf"><span>UF</span>
+      <select id="fUf"></select>
+    </label>
+
+    <label class="campo"><span>Esfera</span>
+      <select id="fEsfera">
+        <option value="">Todas</option>
+        <option value="F">Federal</option>
+        <option value="E">Estadual</option>
+        <option value="M">Municipal</option>
+        <option value="D">Distrital</option>
+      </select>
+    </label>
+
+    <label class="campo" id="campoStatus"><span>Status</span>
+      <select id="fStatus"></select>
+    </label>
+
+    <label class="campo" id="campoSituacao"><span>Situação</span>
+      <select id="fSituacao">
+        <option value="">Todas</option>
+        <option value="divulgada">Divulgada no PNCP</option>
+        <option value="revogada">Revogada</option>
+        <option value="anulada">Anulada</option>
+        <option value="suspensa">Suspensa</option>
+      </select>
+    </label>
+
+    <div class="campo"><span>Órgão <small>(nome ou CNPJ)</small></span>
+      <div class="combo" id="comboOrgao">
+        <input type="text" id="fOrgao" placeholder="ex.: prefeitura ou 00394494000136" style="min-width:240px" autocomplete="off">
+        <button type="button" class="limpar" id="limparOrgao" title="Limpar órgão">✕</button>
+        <div class="combo-lista" id="listaOrgao" role="listbox"></div>
+      </div>
+    </div>
+
+    <div class="campo"><span>Unidade <small>(após escolher o órgão)</small></span>
+      <div class="combo" id="comboUnidade">
+        <input type="text" id="fUnidade" placeholder="código ou nome da unidade" style="min-width:230px" autocomplete="off">
+        <button type="button" class="limpar" id="limparUnidade" title="Limpar unidade">✕</button>
+        <div class="combo-lista" id="listaUnidade" role="listbox"></div>
+      </div>
+    </div>
+
+    <label class="campo"><span>Palavra-chave <small>(no objeto)</small></span>
+      <input type="text" id="fPalavra" placeholder="ex.: merenda, obras, software…" style="min-width:210px">
+    </label>
+
+    <label class="campo"><span>Valor mín. <small>(R$)</small></span>
+      <input type="text" inputmode="numeric" id="fValorMin" placeholder="0" style="min-width:110px">
+    </label>
+
+    <label class="campo"><span>Valor máx. <small>(R$)</small></span>
+      <input type="text" inputmode="numeric" id="fValorMax" placeholder="sem limite" style="min-width:120px">
+    </label>
+
+    <label class="campo"><span>Ordenar por</span>
+      <select id="fOrdenar" style="min-width:170px">
+        <option value="data_desc">Data (mais recente)</option>
+        <option value="data_asc">Data (mais antiga)</option>
+        <option value="valor_desc">Valor (maior primeiro)</option>
+        <option value="valor_asc">Valor (menor primeiro)</option>
+      </select>
+    </label>
+
+    <button id="btnBuscar">Buscar</button>
+  </section>
+
+  <div id="totalizador" hidden></div>
+
+  <div id="status" role="status"></div>
+  <div class="lista" id="lista"></div>
+  <div class="paginacao" id="paginacao" hidden>
+    <button id="btnAnt">← Anterior</button>
+    <button id="btnProx">Próxima →</button>
+  </div>
+
+  <footer>
+    Fonte: API pública de consulta do PNCP (pncp.gov.br/api/consulta) · sem autenticação ·
+    CNPJ do órgão, código de unidade e "A Receber/Recebendo Proposta" são aplicados pelo servidor do PNCP;
+    os demais status, esfera, situação, nomes e palavra-chave filtram os resultados já carregados na página.
+  </footer>
+</main>
+
+<script>
+const BASE = "https://pncp.gov.br/api/consulta";
+
+const ABAS = [
+  { id:"licitacoes", rotulo:"Licitações" },
+  { id:"contratos",  rotulo:"Contratos"  },
+  { id:"atas",       rotulo:"Atas"       },
+];
+
+const MODALIDADES = [
+  [6,"Pregão Eletrônico"],[7,"Pregão Presencial"],[4,"Concorrência Eletrônica"],
+  [5,"Concorrência Presencial"],[8,"Dispensa de Licitação"],[9,"Inexigibilidade"],
+  [12,"Credenciamento"],[3,"Concurso"],[2,"Diálogo Competitivo"],
+  [1,"Leilão Eletrônico"],[13,"Leilão Presencial"],[10,"Manifestação de Interesse"],
+  [11,"Pré-qualificação"],
+];
+
+const UFS = ["","AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA",
+  "PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
+
+const ESFERAS = { F:"Federal", E:"Estadual", M:"Municipal", D:"Distrital" };
+
+// ── Estado ──────────────────────────────────────────────
+let aba = "licitacoes";
+let pagina = 1;
+let dados = null;
+let carregando = false;
+
+// Seleções das listas suspensas
+let orgaoSel = null;                // { cnpj, nome } ou null
+let unidadeSel = null;              // { codigo, nome } ou null
+let unidadesDoOrgao = [];           // unidades carregadas do órgão selecionado
+
+// ── Utilidades ──────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const aaaammdd = (iso) => (iso||"").replaceAll("-","");
+const brl = (v) => v==null ? "—" :
+  new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v);
+const dataBR = (s) => {
+  if(!s) return "—";
+  const [a,m,d] = String(s).slice(0,10).split("-");
+  return (a&&m&&d) ? `${d}/${m}/${a}` : s;
+};
+const esc = (s) => String(s??"").replace(/[&<>"']/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const semAcento = (s) => String(s||"").toLowerCase()
+  .normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+const parseControle = (nc) => {
+  const m = String(nc||"").match(/^(\d{14})-\d-(\d{6})\/(\d{4})$/);
+  return m ? { cnpj:m[1], seq:parseInt(m[2],10), ano:m[3] } : null;
+};
+
+// ── Inicialização ───────────────────────────────────────
+function init(){
+  const nav = $("abas");
+  ABAS.forEach(a=>{
+    const b = document.createElement("button");
+    b.textContent = a.rotulo;
+    b.onclick = ()=>{ aba=a.id; dados=null; atualizarAbas(); mostrarBoasVindas(); };
+    b.dataset.id = a.id;
+    nav.appendChild(b);
+  });
+
+  $("fModalidade").innerHTML =
+    `<option value="">Todas as modalidades</option>` +
+    MODALIDADES.map(([c,n])=>`<option value="${c}">${n}</option>`).join("");
+  $("fUf").innerHTML =
+    UFS.map(s=>`<option value="${s}">${s||"Todas"}</option>`).join("");
+
+  const hoje = new Date();
+  const semanaAtras = new Date(); semanaAtras.setDate(hoje.getDate()-7);
+  $("fDataFim").value = hoje.toISOString().slice(0,10);
+  $("fDataIni").value = semanaAtras.toISOString().slice(0,10);
+
+  $("btnBuscar").onclick = ()=>buscar(1);
+  $("btnAnt").onclick  = ()=>buscar(pagina-1);
+  $("btnProx").onclick = ()=>buscar(pagina+1);
+  $("fPalavra").onkeydown = (e)=>{ if(e.key==="Enter") buscar(1); };
+
+  // Filtros e ordenação que atuam sobre os dados já carregados: aplicam na hora
+  const reaplicar = ()=>{ if(dados) render(); };
+  ["fPalavra","fValorMin","fValorMax"].forEach(id=> $(id).oninput = reaplicar);
+  ["fOrdenar","fEsfera","fSituacao"].forEach(id=>{
+    const el = $(id);
+    if(el) el.addEventListener("change", reaplicar);
+  });
+  // Status: em licitações pode trocar o endpoint do servidor → refaz a busca
+  $("fStatus").addEventListener("change", ()=>{
+    if(!dados) return;
+    if(aba==="licitacoes") buscar(1); else render();
+  });
+
+  configurarComboOrgao();
+  configurarComboUnidade();
+  document.addEventListener("click", (e)=>{
+    if(!e.target.closest(".combo")) fecharListas();
+  });
+
+  atualizarAbas();
+  mostrarBoasVindas();
+}
+
+function mostrarBoasVindas(){
+  $("status").innerHTML = "";
+  $("paginacao").hidden = true;
+  $("totalizador").hidden = true;
+  $("lista").innerHTML =
+    `<div class="vazio">Escolha os filtros acima e clique em <b>Buscar</b>.</div>`;
+}
+
+// ── Listas suspensas de Órgão e Unidade ─────────────────
+const SEARCH = "https://pncp.gov.br/api/search";
+let debounceOrgao, debounceUnidade;
+
+function fecharListas(){
+  $("listaOrgao").classList.remove("aberta");
+  $("listaUnidade").classList.remove("aberta");
+}
+
+// Busca textual de órgãos no mesmo endpoint que o site do PNCP usa
+async function buscarOrgaosRemoto(termo){
+  const p = new URLSearchParams({
+    q: termo, tipos_documento: "edital", ordenacao: "-data",
+    pagina: "1", tam_pagina: "50", status: "todos",
+  });
+  const r = await fetch(`${SEARCH}/?${p}`, { headers:{ accept:"application/json" } });
+  if(!r.ok) throw new Error(`busca falhou (${r.status})`);
+  const j = await r.json();
+
+  // O formato pode variar; tentamos várias chaves de lista e de campos.
+  const lista = j.items || j.results || j.data || j.hits || j.content ||
+    (Array.isArray(j) ? j : []);
+
+  const termoNorm = semAcento(termo);
+  const vistos = new Map(); // cnpj -> {cnpj, nome, uf, municipio}
+
+  for(const it of lista){
+    const cnpjBruto = it.orgao_cnpj ?? it.cnpj ?? it.orgaoCnpj ??
+      it.orgao?.cnpj ?? it.entidade_cnpj ?? "";
+    const nome = it.orgao_nome ?? it.orgaoNome ?? it.orgao?.nome ??
+      it.razaoSocial ?? it.razao_social ?? it.entidade_nome ?? it.nome_orgao ?? "";
+    const uf = it.uf ?? it.unidade_uf ?? it.municipio_uf ?? it.orgao?.uf ?? "";
+    const municipio = it.municipio_nome ?? it.municipio ?? it.unidade_municipio ?? "";
+    const cnpj = String(cnpjBruto).replace(/\D/g,"");
+    if(cnpj.length!==14 || !nome) continue;
+    // Só órgãos cujo nome realmente contém o termo (o endpoint busca no edital todo)
+    if(!semAcento(nome).includes(termoNorm)) continue;
+    if(!vistos.has(cnpj)) vistos.set(cnpj, { cnpj, nome, uf, municipio });
+  }
+
+  const achados = [...vistos.values()];
+  // Diagnóstico: se a resposta veio mas não reconhecemos nada, mostramos no console
+  if(achados.length===0 && lista.length>0){
+    console.warn("PNCP: resposta recebida mas formato não reconhecido. Exemplo de item:", lista[0]);
+  }
+  return achados;
+}
+
+function configurarComboOrgao(){
+  const input = $("fOrgao"), lista = $("listaOrgao");
+
+  input.oninput = ()=>{
+    if(orgaoSel){ orgaoSel=null; $("comboOrgao").classList.remove("selecionado"); limparUnidades(); }
+    clearTimeout(debounceOrgao);
+    const termo = input.value.trim();
+    if(termo.length < 2){
+      lista.innerHTML = `<div class="combo-dica">Digite ao menos 2 letras do nome do órgão (ex.: “controladoria”) ou cole um CNPJ.</div>`;
+      lista.classList.add("aberta");
+      return;
+    }
+    lista.innerHTML = `<div class="combo-dica">Procurando “${esc(termo)}” no PNCP…</div>`;
+    lista.classList.add("aberta");
+    debounceOrgao = setTimeout(()=>rodarBuscaOrgao(termo), 350);
+  };
+  input.onfocus = ()=>{ if(input.value.trim().length>=2) input.oninput(); };
+  input.onkeydown = (e)=>{
+    if(e.key==="Enter"){ e.preventDefault(); fecharListas(); buscar(1); }
+    if(e.key==="Escape") fecharListas();
+  };
+
+  $("limparOrgao").onclick = ()=>{
+    orgaoSel=null; input.value=""; $("comboOrgao").classList.remove("selecionado");
+    limparUnidades(); fecharListas(); input.focus();
+  };
+
+  async function rodarBuscaOrgao(termo){
+    try{
+      const orgaos = await buscarOrgaosRemoto(termo);
+      if(input.value.trim() !== termo) return; // usuário já digitou outra coisa
+      if(orgaos.length===0){
+        lista.innerHTML = `<div class="combo-dica">Nenhum órgão encontrado para “${esc(termo)}”. Tente outro termo ou cole o CNPJ.</div>`;
+        return;
+      }
+      lista.innerHTML = orgaos.map(o=>{
+        const local = [o.municipio, o.uf].filter(Boolean).join("/");
+        return `<div class="combo-item" data-cnpj="${o.cnpj}" data-nome="${esc(o.nome)}">${esc(o.nome)}
+          <span class="cnpj">CNPJ ${o.cnpj}${local ? " · "+esc(local) : ""}</span></div>`;
+      }).join("");
+      lista.querySelectorAll(".combo-item").forEach(el=>
+        el.onclick = ()=> selecionarOrgao(el.dataset.cnpj, el.dataset.nome));
+    }catch(e){
+      lista.innerHTML = `<div class="combo-dica">Não foi possível buscar agora (${esc(e.message)}). Você ainda pode colar o CNPJ direto.</div>`;
+    }
+  }
+}
+
+function selecionarOrgao(cnpj, nome){
+  orgaoSel = { cnpj, nome };
+  $("fOrgao").value = nome;
+  $("comboOrgao").classList.add("selecionado");
+  fecharListas();
+  carregarUnidades(cnpj);
+}
+
+function limparUnidades(){
+  unidadeSel = null; unidadesDoOrgao = [];
+  $("fUnidade").value = "";
+  $("comboUnidade").classList.remove("selecionado");
+  $("fUnidade").placeholder = "escolha um órgão antes";
+  $("fUnidade").disabled = true;
+}
+
+async function carregarUnidades(cnpj){
+  limparUnidades();
+  $("fUnidade").disabled = true;
+  $("fUnidade").placeholder = "carregando unidades…";
+  try{
+    const r = await fetch(`https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/unidades`,
+      { headers:{ accept:"application/json" } });
+    unidadesDoOrgao = r.ok ? (await r.json() || []) : [];
+  }catch{ unidadesDoOrgao = []; }
+  $("fUnidade").disabled = false;
+  $("fUnidade").placeholder = unidadesDoOrgao.length
+    ? `buscar entre ${unidadesDoOrgao.length} unidade(s)…`
+    : "órgão sem unidades — digite para filtrar";
+}
+
+function configurarComboUnidade(){
+  const input = $("fUnidade"), lista = $("listaUnidade");
+  input.disabled = true; // habilita só após escolher um órgão
+
+  input.oninput = ()=>{
+    if(unidadeSel){ unidadeSel=null; $("comboUnidade").classList.remove("selecionado"); }
+    sugerirUnidades();
+  };
+  input.onfocus = sugerirUnidades;
+  input.onkeydown = (e)=>{
+    if(e.key==="Enter"){ e.preventDefault(); fecharListas(); buscar(1); }
+    if(e.key==="Escape") fecharListas();
+  };
+
+  $("limparUnidade").onclick = ()=>{
+    unidadeSel=null; input.value="";
+    $("comboUnidade").classList.remove("selecionado"); fecharListas(); input.focus();
+  };
+
+  function sugerirUnidades(){
+    const termo = semAcento(input.value.trim());
+
+    if(!orgaoSel){
+      lista.innerHTML = `<div class="combo-dica">Escolha primeiro um órgão — as unidades dele aparecerão aqui.</div>`;
+      lista.classList.add("aberta");
+      return;
+    }
+    if(unidadesDoOrgao.length===0){
+      lista.innerHTML = `<div class="combo-dica">Este órgão não tem unidades listadas no PNCP.</div>`;
+      lista.classList.add("aberta");
+      return;
+    }
+
+    const achadas = unidadesDoOrgao.filter(u=>{
+      const nome = semAcento(u.nomeUnidade||"");
+      const cod  = String(u.codigoUnidade||"");
+      return !termo || nome.includes(termo) || cod.includes(termo);
+    }).slice(0,20);
+
+    lista.innerHTML = achadas.length
+      ? achadas.map(u=>`<div class="combo-item" data-cod="${esc(String(u.codigoUnidade||""))}" data-nome="${esc(u.nomeUnidade||"")}">
+          ${esc(u.nomeUnidade||"(sem nome)")}
+          <span class="cnpj">Código ${esc(String(u.codigoUnidade||"—"))}${u.municipioNome ? " · "+esc(u.municipioNome) : ""}${u.ufSigla ? "/"+esc(u.ufSigla) : ""}</span>
+        </div>`).join("")
+      : `<div class="combo-dica">Nenhuma unidade combina com “${esc(input.value)}”.</div>`;
+    lista.classList.add("aberta");
+
+    lista.querySelectorAll(".combo-item").forEach(el=>{
+      el.onclick = ()=>{
+        unidadeSel = { codigo: el.dataset.cod, nome: el.dataset.nome };
+        input.value = el.dataset.nome;
+        $("comboUnidade").classList.add("selecionado");
+        fecharListas();
+      };
+    });
+  }
+}
+
+function atualizarAbas(){
+  document.querySelectorAll("#abas button").forEach(b=>
+    b.classList.toggle("ativa", b.dataset.id===aba));
+  $("campoModalidade").style.display = aba==="licitacoes" ? "" : "none";
+  $("campoUf").style.display         = aba==="licitacoes" ? "" : "none";
+  $("campoSituacao").style.display   = aba==="licitacoes" ? "" : "none";
+
+  // Status muda conforme o tipo de documento (como no portal do PNCP)
+  const ops = aba==="licitacoes"
+    ? [["","Todos"],
+       ["recebendo","A Receber/Recebendo Proposta"],
+       ["julgamento","Em Julgamento/Propostas Encerradas"],
+       ["encerradas","Encerradas"]]
+    : [["","Todos"],
+       ["vigentes","Vigentes"],
+       ["nao_vigentes","Não vigentes"]];
+  $("fStatus").innerHTML = ops.map(([v,n])=>`<option value="${v}">${n}</option>`).join("");
+}
+
+// ── Busca ───────────────────────────────────────────────
+const espera = (ms)=> new Promise(r=>setTimeout(r,ms));
+
+async function requisitar(url){
+  // O servidor do PNCP às vezes devolve erro 5xx transitório.
+  // Tentamos 3 vezes; na última, sem o parâmetro tamanhoPagina.
+  const tentativas = [url, url, url.replace(/&tamanhoPagina=\d+/, "")];
+  let ultimoErro = null;
+  for(let i=0; i<tentativas.length; i++){
+    if(i>0) await espera(900*i);
+    const r = await fetch(tentativas[i], { headers:{ accept:"application/json" } });
+    if(r.status===204) return { data:[], totalRegistros:0, totalPaginas:0 };
+    if(r.ok) return await r.json();
+    const corpo = await r.text().catch(()=> "");
+    ultimoErro = new Error(`A API do PNCP retornou erro ${r.status}. ${corpo.slice(0,200)}`);
+    if(r.status < 500) break; // erro de parâmetros: repetir não resolve
+  }
+  throw ultimoErro;
+}
+
+async function buscar(pg){
+  if(carregando) return;
+  carregando = true; pagina = Math.max(1,pg);
+  $("btnBuscar").disabled = true; $("btnBuscar").textContent = "Buscando…";
+  $("status").innerHTML = dados ? "" :
+    `<p class="resumo">Consultando o PNCP…</p>`;
+
+  const p = new URLSearchParams({ pagina:String(pagina), tamanhoPagina:"20" });
+  p.set("dataInicial", aaaammdd($("fDataIni").value));
+  p.set("dataFinal",   aaaammdd($("fDataFim").value));
+
+  // Órgão: selecionado na lista (ou CNPJ digitado) vai pro servidor; nome avulso filtra localmente
+  const orgaoDigitos = $("fOrgao").value.replace(/\D/g,"");
+  if(orgaoSel) p.set("cnpj", orgaoSel.cnpj);
+  else if(orgaoDigitos.length===14) p.set("cnpj", orgaoDigitos);
+
+  // Unidade: selecionada na lista (ou código digitado) vai pro servidor; nome avulso filtra localmente
+  const unidadeTexto = $("fUnidade").value.trim();
+  if(unidadeSel?.codigo) p.set("codigoUnidadeAdministrativa", unidadeSel.codigo);
+  else if(unidadeTexto && /^\d+$/.test(unidadeTexto)) p.set("codigoUnidadeAdministrativa", unidadeTexto);
+
+  // Caso especial: "Todas as modalidades" + endpoint de publicação.
+  // Esse endpoint exige modalidade, então consultamos cada uma e juntamos.
+  const modalidadeVazia = aba==="licitacoes" && !$("fModalidade").value;
+  const usaProposta = aba==="licitacoes" && $("fStatus").value==="recebendo";
+
+  if(modalidadeVazia && !usaProposta){
+    const baseParams = new URLSearchParams(p);
+    baseParams.set("dataInicial", aaaammdd($("fDataIni").value));
+    baseParams.set("dataFinal",   aaaammdd($("fDataFim").value));
+    if($("fUf").value) baseParams.set("uf", $("fUf").value);
+
+    try{
+      let juntos = [], totalReg = 0, maxPag = 0, urlExemplo = "";
+      for(const [cod] of MODALIDADES){
+        const pm = new URLSearchParams(baseParams);
+        pm.set("codigoModalidadeContratacao", String(cod));
+        const u = `${BASE}/v1/contratacoes/publicacao?${pm}`;
+        if(!urlExemplo) urlExemplo = u;
+        const parcial = await requisitar(u).catch(()=>null);
+        if(parcial?.data?.length){
+          juntos = juntos.concat(parcial.data);
+          totalReg += parcial.totalRegistros || parcial.data.length;
+          maxPag = Math.max(maxPag, parcial.totalPaginas || 1);
+        }
+      }
+      // Ordena por data de publicação (mais recente primeiro)
+      juntos.sort((a,b)=> String(b.dataPublicacaoPncp||"").localeCompare(String(a.dataPublicacaoPncp||"")));
+      dados = { data: juntos, totalRegistros: totalReg, totalPaginas: maxPag, _multi: true };
+      render();
+    }catch(e){
+      dados = null; $("lista").innerHTML = ""; $("paginacao").hidden = true;
+      $("status").innerHTML = `<div class="erro"><strong>Algo deu errado.</strong> ${esc(e.message)}</div>`;
+    }finally{
+      carregando = false;
+      $("btnBuscar").disabled = false; $("btnBuscar").textContent = "Buscar";
+    }
+    return;
+  }
+
+  let url;
+  if(aba==="licitacoes"){
+    p.set("codigoModalidadeContratacao", $("fModalidade").value);
+    if($("fUf").value) p.set("uf", $("fUf").value);
+    if(usaProposta){
+      // Endpoint dedicado: contratações com recebimento de propostas em aberto (hoje)
+      p.delete("dataInicial");
+      p.set("dataFinal", aaaammdd(new Date().toISOString().slice(0,10)));
+      // "Todas" aqui é aceito pelo endpoint de proposta (modalidade é opcional)
+      if(!$("fModalidade").value) p.delete("codigoModalidadeContratacao");
+      url = `${BASE}/v1/contratacoes/proposta?${p}`;
+    } else {
+      url = `${BASE}/v1/contratacoes/publicacao?${p}`;
+    }
+  } else if(aba==="contratos"){
+    url = `${BASE}/v1/contratos?${p}`;
+  } else {
+    url = `${BASE}/v1/atas?${p}`;
+  }
+
+  try{
+    dados = await requisitar(url);
+    render();
+  }catch(e){
+    dados = null;
+    $("lista").innerHTML = ""; $("paginacao").hidden = true;
+    const msg = e instanceof TypeError
+      ? "Não foi possível conectar à API do PNCP. Verifique sua internet ou tente de novo em instantes."
+      : e.message;
+    $("status").innerHTML = `<div class="erro"><strong>Algo deu errado.</strong> ${esc(msg)}<br><br>
+      <a href="${url}" target="_blank" rel="noreferrer" style="color:inherit;font-weight:600">
+        Testar esta consulta direto no navegador ↗</a> —
+      se lá também aparecer erro, o serviço do PNCP está instável no momento; aguarde alguns minutos e tente de novo.</div>`;
+  }finally{
+    carregando = false;
+    $("btnBuscar").disabled = false; $("btnBuscar").textContent = "Buscar";
+  }
+}
+
+// ── Filtros locais + renderização ───────────────────────
+// Valor representativo de um registro (estimado/homologado/global conforme o tipo)
+function valorDe(it){
+  const v = it.valorTotalEstimado ?? it.valorTotalHomologado ?? it.valorGlobal ?? it.valorInicial;
+  return (typeof v === "number" && !isNaN(v)) ? v : null;
+}
+// Data representativa para ordenação
+function dataDe(it){
+  const d = it.dataPublicacaoPncp || it.dataAssinatura || it.dataVigenciaInicio
+    || it.vigenciaInicio || it.dataInclusao || "";
+  return d ? String(d).slice(0,10) : "";
+}
+// Converte "1.500,00" ou "1500" digitado pelo usuário em número
+function parseValorBR(txt){
+  if(!txt) return null;
+  const limpo = String(txt).replace(/[^\d,.-]/g,"").replace(/\./g,"").replace(",",".");
+  const n = parseFloat(limpo);
+  return isNaN(n) ? null : n;
+}
+
+function filtrar(itens){
+  const palavra = $("fPalavra").value.trim().toLowerCase();
+  const esfera  = $("fEsfera").value;
+  const status  = $("fStatus").value;
+  const situacao = $("fSituacao").value;
+  const vMin = parseValorBR($("fValorMin").value);
+  const vMax = parseValorBR($("fValorMax").value);
+  const orgaoTxt = orgaoSel ? "" : $("fOrgao").value.trim().toLowerCase();
+  const orgaoEhCnpj = $("fOrgao").value.replace(/\D/g,"").length===14;
+  const unidadeTxt = unidadeSel ? "" : $("fUnidade").value.trim().toLowerCase();
+  const unidadeEhCodigo = /^\d+$/.test($("fUnidade").value.trim());
+  const agora = new Date();
+
+  return itens.filter(it=>{
+    if(esfera && (it.orgaoEntidade?.esferaId||"") !== esfera) return false;
+
+    if(situacao && aba==="licitacoes"){
+      const s = (it.situacaoCompraNome||"").toLowerCase();
+      if(!s.includes(situacao)) return false;
+    }
+
+    if(status){
+      if(aba==="licitacoes"){
+        // "recebendo" já vem filtrado pelo servidor; os demais calculamos pelas datas
+        const fim = it.dataEncerramentoProposta ? new Date(it.dataEncerramentoProposta) : null;
+        const temResultado = it.existeResultado === true;
+        const divulgada = (it.situacaoCompraNome||"").toLowerCase().includes("divulgada");
+        if(status==="julgamento" &&
+          !(fim && fim < agora && !temResultado && divulgada)) return false;
+        if(status==="encerradas" &&
+          !(temResultado || !divulgada)) return false;
+      } else {
+        const vi = it.dataVigenciaInicio || it.vigenciaInicio;
+        const vf = it.dataVigenciaFim   || it.vigenciaFim;
+        const vigente = vi && vf && new Date(vi) <= agora && new Date(vf + "T23:59:59") >= agora;
+        if(status==="vigentes" && !vigente) return false;
+        if(status==="nao_vigentes" && vigente) return false;
+      }
+    }
+
+    if(orgaoTxt && !orgaoEhCnpj){
+      const nome = (it.orgaoEntidade?.razaoSocial || it.nomeRazaoSocialFornecedor || "").toLowerCase();
+      if(!nome.includes(orgaoTxt)) return false;
+    }
+    if(unidadeTxt && !unidadeEhCodigo){
+      const nu = (it.unidadeOrgao?.nomeUnidade||"").toLowerCase();
+      if(!nu.includes(unidadeTxt)) return false;
+    }
+    if(vMin!=null || vMax!=null){
+      const v = valorDe(it);
+      if(v==null) return false; // sem valor não passa quando há faixa definida
+      if(vMin!=null && v < vMin) return false;
+      if(vMax!=null && v > vMax) return false;
+    }
+
+    if(palavra){
+      const texto = [it.objetoCompra, it.objetoContrato, it.objetoContratacao,
+        it.orgaoEntidade?.razaoSocial, it.nomeRazaoSocialFornecedor,
+        it.unidadeOrgao?.municipioNome].filter(Boolean).join(" ").toLowerCase();
+      if(!texto.includes(palavra)) return false;
+    }
+    return true;
+  });
+}
+
+// Ordena conforme o seletor "Ordenar por"
+function ordenar(itens){
+  const modo = $("fOrdenar").value;
+  const arr = itens.slice();
+  arr.sort((a,b)=>{
+    if(modo.startsWith("valor")){
+      const va = valorDe(a) ?? -Infinity, vb = valorDe(b) ?? -Infinity;
+      return modo==="valor_desc" ? vb-va : va-vb;
+    }
+    const da = dataDe(a), db = dataDe(b);
+    return modo==="data_asc" ? da.localeCompare(db) : db.localeCompare(da);
+  });
+  return arr;
+}
+
+function render(){
+  if(!dados) return;
+  const todos = dados.data || [];
+  const itens = ordenar(filtrar(todos));
+  const totalReg = dados.totalRegistros ?? 0;
+  const totalPag = dados.totalPaginas ?? 0;
+  const filtrosLocais = itens.length !== todos.length;
+
+  $("status").innerHTML = `<p class="resumo">
+    ${totalReg.toLocaleString("pt-BR")} registro(s) no período
+    ${dados._multi ? ` · ${todos.length} carregados (1ª página de cada modalidade)` : ""}
+    ${filtrosLocais ? ` · ${itens.length} após filtros locais` : ""}
+    ${!dados._multi && totalPag>1 ? ` · página ${pagina} de ${totalPag.toLocaleString("pt-BR")}` : ""}
+  </p>`;
+
+  // Totalizador: contagem, soma e média dos valores exibidos
+  const valores = itens.map(valorDe).filter(v=>v!=null);
+  if(itens.length>0){
+    const soma = valores.reduce((a,b)=>a+b,0);
+    const media = valores.length ? soma/valores.length : 0;
+    $("totalizador").hidden = false;
+    $("totalizador").innerHTML = `
+      <div class="tot-card"><div class="rotulo">Resultados exibidos</div>
+        <div class="valor-tot">${itens.length.toLocaleString("pt-BR")}</div></div>
+      <div class="tot-card"><div class="rotulo">Soma dos valores</div>
+        <div class="valor-tot">${brl(soma)}</div></div>
+      <div class="tot-card"><div class="rotulo">Valor médio</div>
+        <div class="valor-tot">${brl(media)}</div></div>`;
+  } else {
+    $("totalizador").hidden = true;
+  }
+
+  if(itens.length===0){
+    $("lista").innerHTML = `<div class="vazio">Nenhum resultado para esses filtros.
+      Amplie o período, troque a modalidade ou limpe os filtros locais.</div>`;
+  } else {
+    $("lista").innerHTML = itens.map(card).join("");
+  }
+
+  // No modo "Todas as modalidades" os resultados já vêm reunidos, sem paginação de servidor
+  $("paginacao").hidden = dados._multi || totalPag<=1;
+  $("btnAnt").disabled  = pagina<=1;
+  $("btnProx").disabled = pagina>=totalPag;
+}
+
+function card(it){
+  const nc = it.numeroControlePNCP || it.numeroControlePNCPAta || it.numeroControlePNCPCompra || "PNCP";
+  const objeto = it.objetoCompra || it.objetoContrato || it.objetoContratacao || "(objeto não informado)";
+  const orgao = it.orgaoEntidade?.razaoSocial || it.nomeRazaoSocialFornecedor || "";
+  const unidade = it.unidadeOrgao?.nomeUnidade || "";
+  const local = it.unidadeOrgao
+    ? [it.unidadeOrgao.municipioNome, it.unidadeOrgao.ufSigla].filter(Boolean).join(" – ") : "";
+  const esfera = ESFERAS[it.orgaoEntidade?.esferaId] || "";
+  const valor = it.valorTotalEstimado ?? it.valorTotalHomologado ?? it.valorGlobal ?? it.valorInicial;
+
+  let link = null;
+  if(aba==="licitacoes"){
+    const c = parseControle(it.numeroControlePNCP);
+    if(c) link = `https://pncp.gov.br/app/editais/${c.cnpj}/${c.ano}/${c.seq}`;
+  } else if(aba==="contratos"){
+    const c = parseControle(it.numeroControlePNCP);
+    if(c) link = `https://pncp.gov.br/app/contratos/${c.cnpj}/${c.ano}/${c.seq}`;
+  } else {
+    const c = parseControle(it.numeroControlePNCPCompra);
+    if(c) link = `https://pncp.gov.br/app/editais/${c.cnpj}/${c.ano}/${c.seq}`;
+  }
+
+  const linhas = [];
+  if(orgao)   linhas.push(`<div><b>${aba==="contratos"?"Fornecedor / Órgão":"Órgão"}:</b> ${esc(orgao)}</div>`);
+  if(unidade) linhas.push(`<div><b>Unidade:</b> ${esc(unidade)}</div>`);
+  if(local)   linhas.push(`<div><b>Local:</b> ${esc(local)}</div>`);
+  if(aba==="licitacoes"){
+    if(it.dataPublicacaoPncp)      linhas.push(`<div><b>Publicado em:</b> ${dataBR(it.dataPublicacaoPncp)}</div>`);
+    if(it.dataEncerramentoProposta)linhas.push(`<div><b>Propostas até:</b> ${dataBR(it.dataEncerramentoProposta)}</div>`);
+  } else {
+    const vi = it.dataVigenciaInicio || it.vigenciaInicio;
+    const vf = it.dataVigenciaFim   || it.vigenciaFim;
+    if(vi) linhas.push(`<div><b>Vigência:</b> ${dataBR(vi)} a ${dataBR(vf)}</div>`);
+  }
+
+  return `<article>
+    <div class="canhoto"><span>${esc(nc)}</span></div>
+    <div class="corpo">
+      <div class="tags">
+        ${it.modalidadeNome ? `<span class="tag">${esc(it.modalidadeNome)}</span>` : ""}
+        ${it.situacaoCompraNome ? `<span class="tag ambar">${esc(it.situacaoCompraNome)}</span>` : ""}
+        ${it.existeResultado ? `<span class="tag">Resultado divulgado</span>` : ""}
+        ${esfera ? `<span class="tag cinza">${esfera}</span>` : ""}
+        ${it.numeroAtaRegistroPreco ? `<span class="tag">Ata ${esc(it.numeroAtaRegistroPreco)}</span>` : ""}
+      </div>
+      <p class="objeto">${esc(objeto.length>280 ? objeto.slice(0,280)+"…" : objeto)}</p>
+      <div class="detalhes">${linhas.join("")}</div>
+      <div class="rodape-card">
+        <span class="valor">${brl(valor)}</span>
+        ${link ? `<a class="link-pncp" href="${link}" target="_blank" rel="noreferrer">Ver no PNCP ↗</a>` : ""}
+      </div>
+    </div>
+  </article>`;
+}
+
+init();
+</script>
+</body>
+</html>
