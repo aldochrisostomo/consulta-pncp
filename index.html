@@ -108,19 +108,56 @@
 
   footer{margin-top:32px;padding-top:12px;border-top:1px solid var(--line);
     font-family:var(--mono);font-size:11.5px;color:var(--ink-soft)}
+
+  /* Hub / catálogo de serviços */
+  .hub-intro{margin:28px 0 22px}
+  .hub-intro h2{font-size:21px;font-weight:800;margin:0 0 6px;letter-spacing:-.3px}
+  .hub-intro p{font-size:14.5px;color:var(--ink-soft);margin:0;max-width:640px;line-height:1.5}
+  .hub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-bottom:28px}
+  .servico-card{text-align:left;background:var(--card);border:1.5px solid var(--line);border-radius:10px;
+    padding:20px;cursor:pointer;font-family:var(--sans);transition:border-color .15s,transform .1s;
+    display:flex;flex-direction:column;gap:8px}
+  .servico-card:hover{border-color:var(--green);transform:translateY(-2px)}
+  .servico-card:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+  .servico-icone{font-size:24px;line-height:1}
+  .servico-titulo{font-size:17px;font-weight:700;color:var(--ink);margin:0}
+  .servico-desc{font-size:13.5px;color:var(--ink-soft);line-height:1.45;margin:0}
+  .servico-seta{font-size:13px;font-weight:600;color:var(--green);margin-top:4px}
+
+  /* Botão Início no topo de cada serviço */
+  .btn-inicio{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;
+    color:var(--ink-soft);background:none;border:none;cursor:pointer;padding:4px 0;font-family:var(--sans)}
+  .btn-inicio:hover{color:var(--green)}
+  .servico-cabecalho{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:6px}
+  .servico-cabecalho .nome-servico{font-size:15px;font-weight:700;color:var(--green-dark)}
 </style>
 </head>
 <body>
 
 <header>
   <div class="wrap">
+    <button class="btn-inicio" id="btnInicio" onclick="irParaHub()" hidden>← Início</button>
     <h1>Consulta PNCP</h1>
     <span class="sub">Portal Nacional de Contratações Públicas · dados abertos</span>
-    <nav id="abas" aria-label="Tipo de consulta"></nav>
+    <nav id="abas" aria-label="Tipo de consulta" hidden></nav>
   </div>
 </header>
 
-<main class="wrap">
+<!-- TELA INICIAL: catálogo de serviços -->
+<div id="hub" class="wrap">
+  <div class="hub-intro">
+    <h2>O que você precisa fazer hoje?</h2>
+    <p>Escolha um serviço abaixo. Todos consultam dados públicos do Portal Nacional
+       de Contratações Públicas (PNCP), sem necessidade de cadastro.</p>
+  </div>
+  <div class="hub-grid" id="hubGrid"></div>
+</div>
+
+<!-- SERVIÇO: Buscador Geral (app existente) -->
+<main class="wrap" id="servico-buscador" hidden>
+  <div class="servico-cabecalho">
+    <span class="nome-servico">Buscador Geral</span>
+  </div>
   <section class="filtros" aria-label="Filtros">
     <label class="campo"><span>De</span><input type="date" id="fDataIni"></label>
     <label class="campo"><span>Até</span><input type="date" id="fDataFim"></label>
@@ -216,6 +253,19 @@
 <script>
 const BASE = "https://pncp.gov.br/api/consulta";
 
+// ── Catálogo de serviços (só os prontos aparecem) ───────
+const SERVICOS = [
+  {
+    id: "buscador",
+    icone: "🔎",
+    titulo: "Buscador Geral",
+    desc: "Pesquise editais, contratos e atas em todo o PNCP por palavra-chave, órgão, modalidade e período. Ponto de partida para explorar contratações públicas.",
+    pronto: true,
+  },
+  // Próximos serviços entram aqui conforme forem construídos:
+  // Atas para Adesão, Artefatos para Modelo, Pesquisa de Preços
+];
+
 const ABAS = [
   { id:"licitacoes", rotulo:"Licitações" },
   { id:"contratos",  rotulo:"Contratos"  },
@@ -265,8 +315,41 @@ const parseControle = (nc) => {
   return m ? { cnpj:m[1], seq:parseInt(m[2],10), ano:m[3] } : null;
 };
 
+// ── Hub / catálogo de serviços ──────────────────────────
+function renderHub(){
+  const grid = $("hubGrid");
+  grid.innerHTML = SERVICOS.filter(s=>s.pronto).map(s=>`
+    <button class="servico-card" onclick="abrirServico('${s.id}')">
+      <span class="servico-icone">${s.icone}</span>
+      <h3 class="servico-titulo">${esc(s.titulo)}</h3>
+      <p class="servico-desc">${esc(s.desc)}</p>
+      <span class="servico-seta">Abrir →</span>
+    </button>`).join("");
+}
+
+function irParaHub(){
+  // Esconde todos os serviços e mostra o catálogo
+  $("servico-buscador").hidden = true;
+  $("abas").hidden = true;
+  $("btnInicio").hidden = true;
+  $("hub").hidden = false;
+  window.scrollTo(0,0);
+}
+
+function abrirServico(id){
+  $("hub").hidden = true;
+  $("btnInicio").hidden = false;
+  if(id==="buscador"){
+    $("servico-buscador").hidden = false;
+    $("abas").hidden = false;
+  }
+  window.scrollTo(0,0);
+}
+
 // ── Inicialização ───────────────────────────────────────
 function init(){
+  renderHub();
+
   const nav = $("abas");
   ABAS.forEach(a=>{
     const b = document.createElement("button");
@@ -884,9 +967,21 @@ function card(it){
 
   let link = null;
   if(it._itemUrl){
-    // Veio da busca do portal: item_url tem o formato /compras/CNPJ/ANO/SEQ
-    const base = it._docType==="contrato" ? "/app/contratos" : "/app/editais";
-    link = `https://pncp.gov.br${base}${it._itemUrl.replace(/^\/compras/, "")}`;
+    // Veio da busca do portal. O item_url indica o tipo pelo prefixo:
+    //   /compras/CNPJ/ANO/SEQ            → edital
+    //   /atas/CNPJ/ANO/SEQ_COMPRA/SEQ    → ata
+    //   /contratos/...                   → contrato
+    const u = it._itemUrl;
+    if(it._docType==="ata" || u.startsWith("/atas")){
+      // mantém o caminho de atas como veio, só troca o domínio/app
+      const caminho = u.startsWith("/atas") ? u : u.replace(/^\/compras/, "/atas");
+      link = `https://pncp.gov.br/app${caminho}`;
+    } else if(it._docType==="contrato" || u.startsWith("/contratos")){
+      const caminho = u.replace(/^\/(contratos|compras)/, "");
+      link = `https://pncp.gov.br/app/contratos${caminho}`;
+    } else {
+      link = `https://pncp.gov.br/app/editais${u.replace(/^\/compras/, "")}`;
+    }
   } else if(aba==="licitacoes"){
     const c = parseControle(it.numeroControlePNCP);
     if(c) link = `https://pncp.gov.br/app/editais/${c.cnpj}/${c.ano}/${c.seq}`;
@@ -894,8 +989,12 @@ function card(it){
     const c = parseControle(it.numeroControlePNCP);
     if(c) link = `https://pncp.gov.br/app/contratos/${c.cnpj}/${c.ano}/${c.seq}`;
   } else {
-    const c = parseControle(it.numeroControlePNCPCompra);
-    if(c) link = `https://pncp.gov.br/app/editais/${c.cnpj}/${c.ano}/${c.seq}`;
+    // Aba de atas via API de consulta: monta /app/atas/CNPJ/ANO/SEQ_COMPRA[/SEQ_ATA]
+    const c = parseControle(it.numeroControlePNCPCompra || it.numeroControlePNCP);
+    if(c){
+      const seqAta = it.numeroAtaRegistroPreco || it.sequencialAta;
+      link = `https://pncp.gov.br/app/atas/${c.cnpj}/${c.ano}/${c.seq}${seqAta ? "/"+seqAta : ""}`;
+    }
   }
 
   const linhas = [];
