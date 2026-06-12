@@ -157,8 +157,8 @@
       </div>
     </div>
 
-    <label class="campo"><span>Palavra-chave <small>(no objeto)</small></span>
-      <input type="text" id="fPalavra" placeholder="ex.: merenda, obras, software…" style="min-width:210px">
+    <label class="campo"><span>Palavra-chave <small>(busca em todo o PNCP)</small></span>
+      <input type="text" id="fPalavra" placeholder="ex.: notebook, merenda, obras…" style="min-width:210px">
     </label>
 
     <label class="campo"><span>Valor mín. <small>(R$)</small></span>
@@ -276,9 +276,9 @@ function init(){
   $("btnProx").onclick = ()=>buscar(pagina+1);
   $("fPalavra").onkeydown = (e)=>{ if(e.key==="Enter") buscar(1); };
 
-  // Filtros e ordenação que atuam sobre os dados já carregados: aplicam na hora
+  // Filtros que atuam sobre os dados já carregados: aplicam na hora
   const reaplicar = ()=>{ if(dados) render(); };
-  ["fPalavra","fValorMin","fValorMax"].forEach(id=> $(id).oninput = reaplicar);
+  ["fValorMin","fValorMax"].forEach(id=> $(id).oninput = reaplicar);
   ["fOrdenar","fEsfera","fSituacao"].forEach(id=>{
     const el = $(id);
     if(el) el.addEventListener("change", reaplicar);
@@ -514,6 +514,55 @@ function atualizarAbas(){
 // ── Busca ───────────────────────────────────────────────
 const espera = (ms)=> new Promise(r=>setTimeout(r,ms));
 
+// Mapeia o tipo de documento de cada aba para o parâmetro do /api/search
+const TIPO_DOC = { licitacoes:"edital", contratos:"contrato", atas:"ata" };
+
+// Converte um item do /api/search para o formato que o app já usa internamente
+function normalizarBusca(it){
+  return {
+    _origem: "search",
+    numeroControlePNCP: it.numero_controle_pncp,
+    objetoCompra: it.description,
+    orgaoEntidade: { razaoSocial: it.orgao_nome, cnpj: it.orgao_cnpj, esferaId: it.esfera_id },
+    unidadeOrgao: { nomeUnidade: it.unidade_nome, municipioNome: it.municipio_nome, ufSigla: it.uf },
+    modalidadeNome: it.modalidade_licitacao_nome,
+    situacaoCompraNome: it.situacao_nome,
+    dataPublicacaoPncp: it.data_publicacao_pncp,
+    dataEncerramentoProposta: it.data_fim_vigencia,
+    dataVigenciaInicio: it.data_inicio_vigencia,
+    dataVigenciaFim: it.data_fim_vigencia,
+    existeResultado: it.tem_resultado,
+    permiteAdesao: it.permite_adesao,
+    valorTotalEstimado: typeof it.valor_global==="number" ? it.valor_global : null,
+    _itemUrl: it.item_url,        // ex.: /compras/CNPJ/ANO/SEQ → para link e itens
+    _docType: it.document_type,
+  };
+}
+
+// Busca via endpoint do portal (rápida, por palavra). Retorna no formato interno.
+async function buscarPorTexto(termo, pg){
+  const p = new URLSearchParams({
+    q: termo,
+    tipos_documento: TIPO_DOC[aba] || "edital",
+    ordenacao: "-data",
+    pagina: String(pg),
+    tam_pagina: "20",
+    status: "todos",
+  });
+  if(aba==="licitacoes" && $("fModalidade").value)
+    p.set("modalidades", $("fModalidade").value);
+  if(aba==="licitacoes" && $("fUf").value)
+    p.set("ufs", $("fUf").value);
+  if(orgaoSel) p.set("orgaos", orgaoSel.cnpj);
+
+  const r = await fetch(`${SEARCH}/?${p}`, { headers:{ accept:"application/json" } });
+  if(!r.ok) throw new Error(`A busca do PNCP retornou erro ${r.status}.`);
+  const j = await r.json();
+  const itens = (j.items || []).map(normalizarBusca);
+  const total = j.total || itens.length;
+  return { data: itens, totalRegistros: total, totalPaginas: Math.ceil(total/20), _origem:"search" };
+}
+
 async function requisitar(url){
   // O servidor do PNCP às vezes devolve erro 5xx transitório.
   // Tentamos 3 vezes; na última, sem o parâmetro tamanhoPagina.
@@ -538,6 +587,27 @@ async function buscar(pg){
   $("status").innerHTML = dados ? "" :
     `<p class="resumo">Consultando o PNCP…</p>`;
 
+  const termo = $("fPalavra").value.trim();
+
+  // CAMINHO 1 — com palavra-chave: usa a busca textual do portal (rápida, no servidor)
+  if(termo){
+    try{
+      dados = await buscarPorTexto(termo, pagina);
+      render();
+    }catch(e){
+      dados = null; $("lista").innerHTML = ""; $("paginacao").hidden = true;
+      const msg = e instanceof TypeError
+        ? "Não foi possível conectar à busca do PNCP. Verifique sua internet ou tente de novo."
+        : e.message;
+      $("status").innerHTML = `<div class="erro"><strong>Algo deu errado.</strong> ${esc(msg)}</div>`;
+    }finally{
+      carregando = false;
+      $("btnBuscar").disabled = false; $("btnBuscar").textContent = "Buscar";
+    }
+    return;
+  }
+
+  // CAMINHO 2 — sem palavra-chave: usa a API de consulta documentada (traz valores e filtros estruturados)
   const p = new URLSearchParams({ pagina:String(pagina), tamanhoPagina:"20" });
   p.set("dataInicial", aaaammdd($("fDataIni").value));
   p.set("dataFinal",   aaaammdd($("fDataFim").value));
@@ -705,7 +775,7 @@ function filtrar(itens){
       if(vMax!=null && v > vMax) return false;
     }
 
-    if(palavra){
+    if(palavra && dados?._origem!=="search"){
       const texto = [it.objetoCompra, it.objetoContrato, it.objetoContratacao,
         it.orgaoEntidade?.razaoSocial, it.nomeRazaoSocialFornecedor,
         it.unidadeOrgao?.municipioNome].filter(Boolean).join(" ").toLowerCase();
@@ -737,9 +807,12 @@ function render(){
   const totalReg = dados.totalRegistros ?? 0;
   const totalPag = dados.totalPaginas ?? 0;
   const filtrosLocais = itens.length !== todos.length;
+  const ehSearch = dados._origem === "search";
 
   $("status").innerHTML = `<p class="resumo">
-    ${totalReg.toLocaleString("pt-BR")} registro(s) no período
+    ${ehSearch
+      ? `${totalReg.toLocaleString("pt-BR")} resultado(s) encontrados no PNCP para “${esc($("fPalavra").value.trim())}”`
+      : `${totalReg.toLocaleString("pt-BR")} registro(s) no período`}
     ${dados._multi ? ` · ${todos.length} carregados (1ª página de cada modalidade)` : ""}
     ${filtrosLocais ? ` · ${itens.length} após filtros locais` : ""}
     ${!dados._multi && totalPag>1 ? ` · página ${pagina} de ${totalPag.toLocaleString("pt-BR")}` : ""}
@@ -750,21 +823,29 @@ function render(){
   if(itens.length>0){
     const soma = valores.reduce((a,b)=>a+b,0);
     const media = valores.length ? soma/valores.length : 0;
+    // No modo busca textual de editais o valor não vem da API — avisamos em vez de mostrar zero
+    const semValor = ehSearch && valores.length===0;
     $("totalizador").hidden = false;
-    $("totalizador").innerHTML = `
-      <div class="tot-card"><div class="rotulo">Resultados exibidos</div>
-        <div class="valor-tot">${itens.length.toLocaleString("pt-BR")}</div></div>
-      <div class="tot-card"><div class="rotulo">Soma dos valores</div>
-        <div class="valor-tot">${brl(soma)}</div></div>
-      <div class="tot-card"><div class="rotulo">Valor médio</div>
-        <div class="valor-tot">${brl(media)}</div></div>`;
+    $("totalizador").innerHTML = semValor
+      ? `<div class="tot-card"><div class="rotulo">Resultados exibidos</div>
+           <div class="valor-tot">${itens.length.toLocaleString("pt-BR")}</div></div>
+         <div class="tot-card" style="flex:2"><div class="rotulo">Valores</div>
+           <div style="font-size:13px;color:var(--ink-soft);margin-top:6px;line-height:1.4">
+             A busca por palavra não retorna valores. Para ver preços, abra um resultado no PNCP
+             ou use a busca sem palavra-chave (por período).</div></div>`
+      : `<div class="tot-card"><div class="rotulo">Resultados exibidos</div>
+           <div class="valor-tot">${itens.length.toLocaleString("pt-BR")}</div></div>
+         <div class="tot-card"><div class="rotulo">Soma dos valores</div>
+           <div class="valor-tot">${brl(soma)}</div></div>
+         <div class="tot-card"><div class="rotulo">Valor médio</div>
+           <div class="valor-tot">${brl(media)}</div></div>`;
   } else {
     $("totalizador").hidden = true;
   }
 
   if(itens.length===0){
     $("lista").innerHTML = `<div class="vazio">Nenhum resultado para esses filtros.
-      Amplie o período, troque a modalidade ou limpe os filtros locais.</div>`;
+      ${ehSearch ? "Tente outra palavra ou limpe os filtros locais." : "Amplie o período, troque a modalidade ou limpe os filtros locais."}</div>`;
   } else {
     $("lista").innerHTML = itens.map(card).join("");
   }
@@ -786,7 +867,11 @@ function card(it){
   const valor = it.valorTotalEstimado ?? it.valorTotalHomologado ?? it.valorGlobal ?? it.valorInicial;
 
   let link = null;
-  if(aba==="licitacoes"){
+  if(it._itemUrl){
+    // Veio da busca do portal: item_url tem o formato /compras/CNPJ/ANO/SEQ
+    const base = it._docType==="contrato" ? "/app/contratos" : "/app/editais";
+    link = `https://pncp.gov.br${base}${it._itemUrl.replace(/^\/compras/, "")}`;
+  } else if(aba==="licitacoes"){
     const c = parseControle(it.numeroControlePNCP);
     if(c) link = `https://pncp.gov.br/app/editais/${c.cnpj}/${c.ano}/${c.seq}`;
   } else if(aba==="contratos"){
