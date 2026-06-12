@@ -86,6 +86,22 @@
   .valor{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--green-dark)}
   .link-pncp{font-size:13px;font-weight:600;color:var(--green);text-decoration:none;border-bottom:1.5px solid var(--green)}
 
+  /* Itens da contratação (expansível) */
+  .btn-itens{font-size:13px;font-weight:600;color:var(--ink);background:none;border:1.5px solid var(--line);
+    border-radius:6px;padding:5px 12px;cursor:pointer}
+  .btn-itens:hover{border-color:var(--ink)}
+  .itens-area{margin-top:10px;border-top:1.5px dashed var(--line);padding-top:10px}
+  .itens-tabela{width:100%;border-collapse:collapse;font-size:13px}
+  .itens-tabela th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--ink-soft);padding:4px 8px;border-bottom:1px solid var(--line)}
+  .itens-tabela td{padding:6px 8px;border-bottom:1px solid var(--paper);vertical-align:top}
+  .itens-tabela tr.destaque{background:#EAF5EF}
+  .itens-tabela tr.destaque td{font-weight:600}
+  .item-unit{font-family:var(--mono);color:var(--green-dark);white-space:nowrap}
+  .item-situacao{font-size:11px;color:var(--ink-soft)}
+  .itens-resumo{font-size:12px;color:var(--ink-soft);margin-bottom:8px}
+  .itens-carregando{font-family:var(--mono);font-size:12.5px;color:var(--ink-soft);padding:6px 0}
+
   .paginacao{display:flex;gap:8px;justify-content:center;margin:20px 0}
   .paginacao button{padding:8px 18px;font-weight:600;background:#fff;border:1.5px solid var(--ink);border-radius:6px;cursor:pointer}
   .paginacao button:disabled{color:var(--line);border-color:var(--line);background:var(--paper);cursor:default}
@@ -895,6 +911,19 @@ function card(it){
     if(vi) linhas.push(`<div><b>Vigência:</b> ${dataBR(vi)} a ${dataBR(vf)}</div>`);
   }
 
+  // Coordenadas para buscar itens: do item_url (busca textual) ou do número de controle
+  let coordItens = null;
+  if(it._itemUrl){
+    const m = it._itemUrl.match(/\/compras\/(\d{14})\/(\d{4})\/(\d+)/);
+    if(m) coordItens = { cnpj:m[1], ano:m[2], seq:m[3] };
+  } else {
+    const c = parseControle(it.numeroControlePNCP || it.numeroControlePNCPCompra);
+    if(c) coordItens = { cnpj:c.cnpj, ano:c.ano, seq:c.seq };
+  }
+  // Itens existem para licitações e atas (contratos não têm esse endpoint de itens)
+  const podeItens = coordItens && aba!=="contratos";
+  const idItens = coordItens ? `itens-${coordItens.cnpj}-${coordItens.ano}-${coordItens.seq}` : "";
+
   return `<article>
     <div class="canhoto"><span>${esc(nc)}</span></div>
     <div class="corpo">
@@ -903,19 +932,96 @@ function card(it){
         ${it.situacaoCompraNome ? `<span class="tag ambar">${esc(it.situacaoCompraNome)}</span>` : ""}
         ${it.existeResultado ? `<span class="tag">Resultado divulgado</span>` : ""}
         ${esfera ? `<span class="tag cinza">${esfera}</span>` : ""}
+        ${it.permiteAdesao===true ? `<span class="tag">Permite adesão</span>` : ""}
         ${it.numeroAtaRegistroPreco ? `<span class="tag">Ata ${esc(it.numeroAtaRegistroPreco)}</span>` : ""}
       </div>
       <p class="objeto">${esc(objeto.length>280 ? objeto.slice(0,280)+"…" : objeto)}</p>
       <div class="detalhes">${linhas.join("")}</div>
       <div class="rodape-card">
         <span class="valor">${brl(valor)}</span>
-        ${link ? `<a class="link-pncp" href="${link}" target="_blank" rel="noreferrer">Ver no PNCP ↗</a>` : ""}
+        <div style="display:flex;gap:10px;align-items:center">
+          ${podeItens ? `<button class="btn-itens" onclick="alternarItens(this,'${coordItens.cnpj}','${coordItens.ano}','${coordItens.seq}','${idItens}')">Ver itens e preços</button>` : ""}
+          ${link ? `<a class="link-pncp" href="${link}" target="_blank" rel="noreferrer">Ver no PNCP ↗</a>` : ""}
+        </div>
       </div>
+      ${podeItens ? `<div class="itens-area" id="${idItens}" hidden></div>` : ""}
     </div>
   </article>`;
 }
 
-init();
+// ── Itens e preços de uma contratação ───────────────────
+const cacheItens = {}; // evita rebuscar a mesma contratação
+
+async function alternarItens(botao, cnpj, ano, seq, idArea){
+  const area = document.getElementById(idArea);
+  if(!area) return;
+
+  // Se já está aberto, fecha
+  if(!area.hidden){
+    area.hidden = true;
+    botao.textContent = "Ver itens e preços";
+    return;
+  }
+  area.hidden = false;
+  botao.textContent = "Ocultar itens";
+
+  // Já carregado antes? Reaproveita
+  const chave = `${cnpj}/${ano}/${seq}`;
+  if(cacheItens[chave]){
+    area.innerHTML = renderItens(cacheItens[chave]);
+    return;
+  }
+
+  area.innerHTML = `<div class="itens-carregando">Carregando itens da contratação…</div>`;
+  try{
+    const url = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/itens`;
+    const r = await fetch(url, { headers:{ accept:"application/json" } });
+    if(!r.ok) throw new Error(`erro ${r.status}`);
+    const itens = await r.json();
+    cacheItens[chave] = Array.isArray(itens) ? itens : [];
+    area.innerHTML = renderItens(cacheItens[chave]);
+  }catch(e){
+    area.innerHTML = `<div class="itens-carregando">Não foi possível carregar os itens
+      (${esc(e.message)}). <a href="https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/itens"
+      target="_blank" rel="noreferrer" style="color:var(--green)">abrir direto ↗</a></div>`;
+  }
+}
+
+function renderItens(itens){
+  if(!itens || itens.length===0)
+    return `<div class="itens-carregando">Esta contratação não tem itens cadastrados no PNCP.</div>`;
+
+  // Termo da busca atual, para destacar itens que combinam
+  const termo = semAcento($("fPalavra").value.trim());
+
+  const linhas = itens.map(it=>{
+    const desc = it.descricao || "(sem descrição)";
+    const combina = termo && semAcento(desc).includes(termo);
+    const qtd = it.quantidade!=null ? Number(it.quantidade).toLocaleString("pt-BR") : "—";
+    const un = (it.unidadeMedida||"").trim();
+    const unit = it.valorUnitarioEstimado!=null ? brl(it.valorUnitarioEstimado) : "—";
+    const tot = it.valorTotal!=null ? brl(it.valorTotal) : "—";
+    const sit = it.situacaoCompraItemNome || "";
+    return `<tr class="${combina ? "destaque" : ""}">
+      <td>${esc(desc)}${it.materialOuServicoNome ? `<div class="item-situacao">${esc(it.materialOuServicoNome)}${sit ? " · "+esc(sit) : ""}</div>` : ""}</td>
+      <td style="text-align:right">${qtd}${un ? ` <span class="item-situacao">${esc(un)}</span>` : ""}</td>
+      <td style="text-align:right" class="item-unit">${unit}</td>
+      <td style="text-align:right" class="item-unit">${tot}</td>
+    </tr>`;
+  }).join("");
+
+  const qtdCombina = termo ? itens.filter(it=> semAcento(it.descricao||"").includes(termo)).length : 0;
+
+  return `
+    ${qtdCombina>0 ? `<div class="itens-resumo">${qtdCombina} item(ns) combinam com sua busca (destacados).</div>` : ""}
+    <table class="itens-tabela">
+      <thead><tr>
+        <th>Item</th><th style="text-align:right">Qtd.</th>
+        <th style="text-align:right">Valor unit.</th><th style="text-align:right">Valor total</th>
+      </tr></thead>
+      <tbody>${linhas}</tbody>
+    </table>`;
+}
 </script>
 </body>
 </html>
