@@ -1623,18 +1623,33 @@ function metaDaBusca(cnpj, ano, seq){
 function renderItensPreco(itens, cnpj, ano, seq){
   if(!itens || itens.length===0) return `<div class="itens-carregando">Esta contratação não tem itens cadastrados.</div>`;
   const termo = semAcento($("pBusca").value.trim());
-  const linhas = itens.map((it,idx)=>{
+
+  // Só mostra itens com valor útil: estimado > 0 OU tem resultado homologado
+  const uteis = itens.filter(it=>
+    it.temResultado === true || (it.valorUnitarioEstimado!=null && it.valorUnitarioEstimado > 0 && it.orcamentoSigiloso !== true)
+  );
+  const descartados = itens.length - uteis.length;
+
+  if(uteis.length===0) return `<div class="itens-carregando">
+    Nenhum item com valor disponível nesta contratação
+    ${descartados>0?`(${descartados} item(ns) com orçamento sigiloso ou valor não informado foram omitidos)`:""}.
+  </div>`;
+
+  const linhas = uteis.map((it,idx)=>{
     const desc = it.descricao||"(sem descrição)";
     const combina = termo && semAcento(desc).includes(termo);
-    const estimado = it.valorUnitarioEstimado;
+    // Trata 0 e negativo como ausente (orçamento sigiloso ou não preenchido)
+    const estimadoBruto = it.valorUnitarioEstimado;
+    const estimado = (estimadoBruto != null && estimadoBruto > 0) ? estimadoBruto : null;
+    const orcamentoSigiloso = it.orcamentoSigiloso === true;
     const temResult = it.temResultado === true;
     const idCesta = `${cnpj}-${ano}-${seq}-${it.numeroItem||idx}`;
     const naCesta = cesta.some(c=> c.id===idCesta);
     const numItem = it.numeroItem || (idx+1);
 
-    // Botão: se tem resultado, busca homologado ao adicionar; senão usa estimado com aviso
+    // Botão: só mostra se tem resultado OU tem valor estimado válido
     let btnHtml = "—";
-    if(estimado!=null || temResult){
+    if(temResult || estimado!=null){
       const label = naCesta ? "✓ Na cesta" : temResult ? "+ Cesta (homologado)" : "+ Cesta (estimado)";
       const cls = `preco-add ${naCesta?"naCesta":""} ${!temResult&&!naCesta?"preco-estimado":""}`;
       btnHtml = `<button class="${cls}" id="add-${idCesta}"
@@ -1642,11 +1657,12 @@ function renderItensPreco(itens, cnpj, ano, seq){
         >${label}</button>`;
     }
 
-    // Valor exibido: estimado (o homologado só vem após clicar)
-    const valorExibido = estimado!=null ? brl(estimado) : "—";
+    // Valor exibido
+    const valorExibido = orcamentoSigiloso ? "sigiloso"
+      : estimado!=null ? brl(estimado) : "não informado";
     const labelValor = temResult
       ? `${valorExibido} <span class="item-situacao" style="color:var(--green-dark)">estimado · clique p/ homologado</span>`
-      : `${valorExibido} <span class="item-situacao" style="color:var(--ink-soft)">estimado · sem resultado</span>`;
+      : `${valorExibido} <span class="item-situacao" style="color:var(--ink-soft)">${orcamentoSigiloso?"(orçamento sigiloso)":"sem resultado"}</span>`;
 
     return `<tr class="${combina?"destaque":""}">
       <td>${esc(desc)}${it.unidadeMedida?`<div class="item-situacao">${esc(it.unidadeMedida.trim())}</div>`:""}</td>
@@ -1661,6 +1677,7 @@ function renderItensPreco(itens, cnpj, ano, seq){
     <tbody>${linhas}</tbody></table>
     <div class="itens-resumo" style="margin-top:6px">
       <b>Legenda:</b> "homologado" = preço efetivamente pago (recomendado pela IN 65); "estimado" = valor do edital, sem resultado registrado.
+      ${descartados>0?`<br><span style="color:var(--ink-soft)">${descartados} item(ns) omitido(s) por orçamento sigiloso ou valor não informado.</span>`:""}
     </div>`;
 }
 
