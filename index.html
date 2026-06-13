@@ -108,7 +108,7 @@
   .preco-add{font-size:13px;font-weight:600;color:#fff;background:var(--green);border:none;
     border-radius:6px;padding:6px 14px;cursor:pointer}
   .preco-add:disabled{background:var(--ink-soft);cursor:default}
-  .preco-add.naCesta{background:var(--green-dark)}
+  .preco-add.preco-estimado{background:var(--ink-soft)}
   .cesta-tabela{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
   .cesta-tabela th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;
     color:var(--ink-soft);padding:6px 8px;border-bottom:1.5px solid var(--line)}
@@ -1623,31 +1623,131 @@ function metaDaBusca(cnpj, ano, seq){
 function renderItensPreco(itens, cnpj, ano, seq){
   if(!itens || itens.length===0) return `<div class="itens-carregando">Esta contratação não tem itens cadastrados.</div>`;
   const termo = semAcento($("pBusca").value.trim());
-  const meta = itens._meta || {};
   const linhas = itens.map((it,idx)=>{
     const desc = it.descricao||"(sem descrição)";
     const combina = termo && semAcento(desc).includes(termo);
-    const unit = it.valorUnitarioEstimado;
+    const estimado = it.valorUnitarioEstimado;
+    const temResult = it.temResultado === true;
     const idCesta = `${cnpj}-${ano}-${seq}-${it.numeroItem||idx}`;
     const naCesta = cesta.some(c=> c.id===idCesta);
-    return `<tr class="${combina?'destaque':''}">
+    const numItem = it.numeroItem || (idx+1);
+
+    // Botão: se tem resultado, busca homologado ao adicionar; senão usa estimado com aviso
+    let btnHtml = "—";
+    if(estimado!=null || temResult){
+      const label = naCesta ? "✓ Na cesta" : temResult ? "+ Cesta (homologado)" : "+ Cesta (estimado)";
+      const cls = `preco-add ${naCesta?"naCesta":""} ${!temResult&&!naCesta?"preco-estimado":""}`;
+      btnHtml = `<button class="${cls}" id="add-${idCesta}"
+        onclick="addCestaComResultado('${idCesta}','${cnpj}','${ano}','${seq}','${numItem}',${temResult})"
+        >${label}</button>`;
+    }
+
+    // Valor exibido: estimado (o homologado só vem após clicar)
+    const valorExibido = estimado!=null ? brl(estimado) : "—";
+    const labelValor = temResult
+      ? `${valorExibido} <span class="item-situacao" style="color:var(--green-dark)">estimado · clique p/ homologado</span>`
+      : `${valorExibido} <span class="item-situacao" style="color:var(--ink-soft)">estimado · sem resultado</span>`;
+
+    return `<tr class="${combina?"destaque":""}">
       <td>${esc(desc)}${it.unidadeMedida?`<div class="item-situacao">${esc(it.unidadeMedida.trim())}</div>`:""}</td>
-      <td style="text-align:right" class="item-unit">${unit!=null?brl(unit):"—"}</td>
-      <td style="text-align:right">${unit!=null?`<button class="preco-add ${naCesta?'naCesta':''}" id="add-${idCesta}"
-        onclick="addCesta('${idCesta}', ${JSON.stringify(desc).replace(/"/g,'&quot;')}, ${unit}, ${JSON.stringify((it.unidadeMedida||'').trim()).replace(/"/g,'&quot;')}, '${cnpj}','${ano}','${seq}')">${naCesta?'✓ Na cesta':'+ Cesta'}</button>`:"—"}</td>
+      <td style="text-align:right" class="item-unit">${labelValor}</td>
+      <td style="text-align:right">${btnHtml}</td>
+      <td id="res-${idCesta}" style="font-size:11.5px;color:var(--ink-soft)"></td>
     </tr>`;
   }).join("");
-  return `<table class="itens-tabela"><thead><tr><th>Item</th>
-    <th style="text-align:right">Valor unit.</th><th style="text-align:right">Ação</th></tr></thead>
-    <tbody>${linhas}</tbody></table>`;
+  return `<table class="itens-tabela"><thead><tr>
+    <th>Item</th><th style="text-align:right">Valor unit. estimado</th>
+    <th style="text-align:right">Ação</th><th>Resultado homologado</th></tr></thead>
+    <tbody>${linhas}</tbody></table>
+    <div class="itens-resumo" style="margin-top:6px">
+      <b>Legenda:</b> "homologado" = preço efetivamente pago (recomendado pela IN 65); "estimado" = valor do edital, sem resultado registrado.
+    </div>`;
+}
+
+// Adiciona à cesta buscando o preço homologado do resultado do item
+async function addCestaComResultado(id, cnpj, ano, seq, numeroItem, temResultado){
+  if(cesta.some(c=>c.id===id)) return;
+  const meta = (cachePItens[`${cnpj}/${ano}/${seq}`]||{})._meta || {};
+  const itens = cachePItens[`${cnpj}/${ano}/${seq}`] || [];
+  const itemDados = itens.find(it=> String(it.numeroItem)===String(numeroItem)) || {};
+  const btn = document.getElementById(`add-${id}`);
+  const resArea = document.getElementById(`res-${id}`);
+
+  // Se não tem resultado, usa estimado direto
+  if(!temResultado){
+    const v = itemDados.valorUnitarioEstimado;
+    if(v==null){ alert("Este item não tem valor disponível."); return; }
+    _pushCesta(id, itemDados, v, null, null, null, meta, "(estimado — sem resultado)");
+    if(btn){ btn.textContent="✓ Na cesta"; btn.classList.add("naCesta"); }
+    if(resArea) resArea.innerHTML = `<span style="color:var(--ink-soft)">estimado: ${brl(v)}</span>`;
+    return;
+  }
+
+  // Tem resultado: busca o homologado
+  if(btn){ btn.disabled=true; btn.textContent="Buscando resultado…"; }
+  try{
+    const url = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/itens/${numeroItem}/resultados`;
+    const r = await fetch(url, { headers:{ accept:"application/json" } });
+    if(!r.ok) throw new Error(`erro ${r.status}`);
+    const resultados = await r.json();
+    // Pega o resultado ativo (não cancelado) com maior valorUnitarioHomologado
+    const ativos = (Array.isArray(resultados)?resultados:[])
+      .filter(res=> !res.dataCancelamento && res.valorUnitarioHomologado!=null)
+      .sort((a,b)=> a.ordemClassificacaoSrp - b.ordemClassificacaoSrp); // 1º colocado
+    if(ativos.length===0){
+      // Sem resultado ativo: fallback para estimado
+      const v = itemDados.valorUnitarioEstimado;
+      _pushCesta(id, itemDados, v, null, null, null, meta, "(sem resultado ativo — usando estimado)");
+      if(resArea) resArea.innerHTML = `<span style="color:var(--amber)">sem resultado ativo — usando estimado: ${brl(v)}</span>`;
+    } else {
+      const res = ativos[0];
+      const v = res.valorUnitarioHomologado;
+      const fornecedor = res.nomeRazaoSocialFornecedor || "";
+      const dataHom = res.dataResultado || "";
+      const situacao = res.situacaoCompraItemResultadoNome || "";
+      _pushCesta(id, itemDados, v, fornecedor, dataHom, situacao, meta, "homologado");
+      if(resArea) resArea.innerHTML =
+        `<b style="color:var(--green-dark)">${brl(v)}</b> homologado`+
+        `${dataHom?` · ${dataBR(dataHom)}`:""}${fornecedor?`<br>${esc(fornecedor)}`:""}`;
+    }
+    if(btn){ btn.textContent="✓ Na cesta"; btn.classList.add("naCesta"); btn.disabled=false; }
+  }catch(e){
+    // Erro de rede: fallback para estimado
+    const v = itemDados.valorUnitarioEstimado;
+    _pushCesta(id, itemDados, v, null, null, null, meta, `(erro ao buscar resultado — usando estimado)`);
+    if(btn){ btn.textContent="✓ Na cesta (estimado)"; btn.classList.add("naCesta"); btn.disabled=false; }
+    if(resArea) resArea.innerHTML = `<span style="color:var(--red)">erro ao buscar resultado</span>`;
+  }
+  renderCesta();
+}
+
+function _pushCesta(id, itemDados, valorUnit, fornecedor, dataHom, situacao, meta, tipoPreco){
+  if(cesta.some(c=>c.id===id)) return;
+  cesta.push({
+    id,
+    descricao: itemDados.descricao || "",
+    valorUnit: Number(valorUnit),
+    unidade: (itemDados.unidadeMedida||"").trim(),
+    orgao: meta.orgao||"",
+    uf: meta.uf||"",
+    municipio: meta.municipio||"",
+    data: dataHom || meta.data||"",         // data de homologação (preferencial) ou publicação
+    dataPublicacao: meta.data||"",
+    controle: meta.controle||"",
+    link: meta.link||"",
+    fornecedor: fornecedor||"",
+    situacaoResultado: situacao||"",
+    tipoPreco,                              // "homologado" | "(estimado — sem resultado)" | etc.
+    excluido: false,
+  });
 }
 
 function addCesta(id, descricao, valorUnit, unidade, cnpj, ano, seq){
-  if(cesta.some(c=>c.id===id)) return; // já está
+  // mantida para compatibilidade com outros serviços
+  if(cesta.some(c=>c.id===id)) return;
   const meta = (cachePItens[`${cnpj}/${ano}/${seq}`]||{})._meta || {};
-  cesta.push({ id, descricao, valorUnit:Number(valorUnit), unidade,
-    orgao:meta.orgao||"", uf:meta.uf||"", municipio:meta.municipio||"",
-    data:meta.data||"", controle:meta.controle||"", link:meta.link||"", excluido:false });
+  _pushCesta(id, {descricao, unidadeMedida:unidade, valorUnitarioEstimado:Number(valorUnit)},
+    Number(valorUnit), null, null, null, meta, "(estimado)");
   const btn = document.getElementById(`add-${id}`);
   if(btn){ btn.textContent="✓ Na cesta"; btn.classList.add("naCesta"); }
   renderCesta();
@@ -1712,10 +1812,14 @@ function renderCesta(){
       c.outlier==="baixo" ? `<span class="badge-outlier badge-baixo">inexequível?</span>` :
       c.outlier==="alto"  ? `<span class="badge-outlier badge-alto">excessivo?</span>` : "";
     const cls = c.excluido ? "excluido" : c.outlier==="baixo" ? "outlier-baixo" : c.outlier==="alto" ? "outlier-alto" : "";
+    const tipoLabel = c.tipoPreco==="homologado"
+      ? `<span style="font-size:10px;color:var(--green-dark);font-weight:600">✓ homologado</span>`
+      : `<span style="font-size:10px;color:var(--ink-soft)">${esc(c.tipoPreco||"estimado")}</span>`;
     return `<tr class="${cls}">
-      <td>${esc(c.descricao)} ${badge}<div class="item-situacao">${esc(c.orgao)}${c.controle?` · ${esc(c.controle)}`:""}</div></td>
+      <td>${esc(c.descricao)} ${badge}<div class="item-situacao">${esc(c.orgao)}${c.controle?` · ${esc(c.controle)}`:""}</div>
+          ${c.fornecedor?`<div class="item-situacao">Fornecedor: ${esc(c.fornecedor)}</div>`:""}</td>
       <td>${esc(c.uf||"—")}</td>
-      <td>${c.data?dataBR(c.data):"—"}</td>
+      <td>${c.data?dataBR(c.data):"—"}<div class="item-situacao">${tipoLabel}</div></td>
       <td style="text-align:right" class="item-unit">${brl(c.valorUnit)}</td>
       <td style="text-align:center"><label style="cursor:pointer;font-size:12px"><input type="checkbox" ${c.excluido?"":"checked"}
         onchange="toggleExcluir('${c.id}')"> usar</label></td>
@@ -1723,11 +1827,9 @@ function renderCesta(){
     </tr>`;
   }).join("");
 
-  let html = `<table class="cesta-tabela"><thead><tr>
-    <th>Item / Fonte</th><th>UF</th><th>Data</th><th style="text-align:right">Valor unit.</th>
+  $("pCesta").innerHTML = `<table class="cesta-tabela"><thead><tr>
+    <th>Item / Fonte / Fornecedor</th><th>UF</th><th>Data / Tipo</th><th style="text-align:right">Valor unit.</th>
     <th style="text-align:center">Cálculo</th><th></th></tr></thead><tbody>${linhas}</tbody></table>`;
-
-  $("pCesta").innerHTML = html;
 
   // Painel de cálculo
   if(calc){
@@ -1773,12 +1875,15 @@ function gerarPlanilha(){
   const N = validos.length;     // quantidade de preços considerados
 
   // Cabeçalho da série (linha 1 de dados = linha 2 da planilha)
-  const cabSerie = ["#","Descrição do item","Valor unit. (R$)","UF","Município",
-    "Órgão","Nº Controle PNCP","Data publicação","Link PNCP","Status","Sinalização outlier"];
+  const cabSerie = ["#","Descrição do item","Valor unit. (R$)","Tipo de preço","Fornecedor/arrematante",
+    "Data homologação","UF","Município","Órgão","Nº Controle PNCP","Data publicação edital","Link PNCP","Status","Sinalização outlier"];
 
   const linhasSerie = cesta.map((c,i)=>[
-    i+1, c.descricao, c.valorUnit, c.uf, c.municipio, c.orgao, c.controle,
-    c.data?dataBR(c.data):"", c.link,
+    i+1, c.descricao, c.valorUnit,
+    c.tipoPreco||"estimado", c.fornecedor||"",
+    c.data&&c.tipoPreco==="homologado"?dataBR(c.data):"",
+    c.uf, c.municipio, c.orgao, c.controle,
+    c.dataPublicacao?dataBR(c.dataPublicacao):"", c.link,
     c.excluido?"DESCONSIDERADO":"Considerado",
     c.outlier==="baixo"?"⚠ Possível inexequível (<75% da média)":c.outlier==="alto"?"⚠ Possível excessivo (>125% da média)":"",
   ]);
@@ -1795,21 +1900,23 @@ function gerarPlanilha(){
 
   // Referências à coluna C da Série de Preços (valores unitários, só os "Considerados")
   // Usamos AVERAGEIF, MINIFS, e para mediana um array MEDIAN(IF(...))
+  // Referências à Série de Preços:
+  // C = Valor unit. | M = Status (Considerado/DESCONSIDERADO) | N = Sinalização outlier
   const refColC  = `'${S}'!C${LINHA_INI}:C${LINHA_INI + cesta.length - 1}`;
-  const refColJ  = `'${S}'!J${LINHA_INI}:J${LINHA_INI + cesta.length - 1}`; // coluna Status
+  const refColM  = `'${S}'!M${LINHA_INI}:M${LINHA_INI + cesta.length - 1}`; // Status
+  const refColN  = `'${S}'!N${LINHA_INI}:N${LINHA_INI + cesta.length - 1}`; // Sinalização outlier
 
-  // Fórmulas reais — AVERAGEIF e MINIFS são suportadas pelo Excel 2016+
-  const fMedia   = `=AVERAGEIF(${refColJ},"Considerado",${refColC})`;
-  const fMenor   = `=MINIFS(${refColC},${refColJ},"Considerado")`;
-  // MEDIAN com IF precisa de Ctrl+Shift+Enter no Excel antigo; no xlsx ela vai como fórmula normal
-  const fMediana = `=MEDIAN(IF(${refColJ}="Considerado",${refColC}))`;
-  // Preço estimado: SWITCH no método escolhido em B4
-  const fEstimado = `=IF(B4="Média",B6,IF(B4="Mediana",B7,IF(B4="Menor preço",B8,"escolha o método")))`;
+  // Fórmulas em português (Excel BR) — separador ponto-e-vírgula
+  const fMedia   = `=MÉDIASE(${refColM};"Considerado";${refColC})`;
+  const fMenor   = `=MÍNIMOSES(${refColC};${refColM};"Considerado")`;
+  // MED com SE — matricial (Ctrl+Shift+Enter no Excel antigo; automático no 365/2019)
+  const fMediana = `=MED(SE(${refColM}="Considerado";${refColC}))`;
+  // Fórmula principal: SE aninhado que lê o método escolhido em B4
+  const fEstimado = `=SE(B4="Média";B6;SE(B4="Mediana";B7;SE(B4="Menor preço";B8;"escolha o método")))`;
 
-  // Outlier-check: fórmulas que recontam os sinalizados
-  const refColK = `'${S}'!K${LINHA_INI}:K${LINHA_INI + cesta.length - 1}`;
-  const fQtdBaixo = `=COUNTIF(${refColK},"*inexequível*")`;
-  const fQtdAlto  = `=COUNTIF(${refColK},"*excessivo*")`;
+  // Contagem de outliers sinalizados
+  const fQtdBaixo = `=CONT.SE(${refColN};"*inexequível*")`;
+  const fQtdAlto  = `=CONT.SE(${refColN};"*excessivo*")`;
 
   const mem = XLSX.utils.aoa_to_sheet([
     ["MEMÓRIA DE CÁLCULO — Pesquisa de Preços"],                            // A1
