@@ -335,16 +335,16 @@
 
   <!-- Objeto da pesquisa -->
   <section class="filtros" aria-label="Objeto e busca">
-    <label class="campo" style="flex:2"><span>Objeto da pesquisa <small>(descrição do que será contratado)</small></span>
-      <input type="text" id="pObjeto" placeholder="ex.: Notebook i5 16GB para uso administrativo" style="min-width:280px">
-    </label>
-    <label class="campo"><span>Buscar item no PNCP</span>
-      <input type="text" id="pBusca" placeholder="ex.: notebook" style="min-width:180px">
+    <label class="campo" style="flex:2"><span>1. O que buscar no PNCP <small>(digite e clique em Buscar)</small></span>
+      <input type="text" id="pBusca" placeholder="ex.: notebook" style="min-width:240px">
     </label>
     <label class="campo"><span>Região <small>(opcional)</small></span>
       <select id="pUf"></select>
     </label>
-    <button id="pBtnBuscar">Buscar preços</button>
+    <button id="pBtnBuscar">🔍 Buscar preços</button>
+    <label class="campo" style="flex:2;width:100%"><span>2. Objeto da pesquisa <small>(descrição p/ o documento — se vazio, usa o termo buscado)</small></span>
+      <input type="text" id="pObjeto" placeholder="ex.: Notebook i5 16GB para uso administrativo" style="min-width:280px">
+    </label>
   </section>
 
   <div id="pStatusMsg" role="status"></div>
@@ -478,6 +478,11 @@ function irParaHub(){
 function abrirServico(id){
   $("hub").hidden = true;
   $("btnInicio").hidden = false;
+  // Esconde todos os serviços e as abas antes de mostrar o escolhido
+  $("servico-buscador").hidden = true;
+  $("servico-atas").hidden = true;
+  $("servico-precos").hidden = true;
+  $("abas").hidden = true;
   if(id==="buscador"){
     $("servico-buscador").hidden = false;
     $("abas").hidden = false;
@@ -1713,7 +1718,7 @@ function gerarPlanilha(){
   if(!calc){ alert("Adicione ao menos um preço válido."); return; }
   marcarOutliers();
   const hoje = new Date().toLocaleDateString("pt-BR");
-  const objeto = $("pObjeto").value.trim() || "[preencher: descrição do objeto]";
+  const objeto = $("pObjeto").value.trim() || $("pBusca").value.trim() || "[preencher: descrição do objeto]";
   const metodoNome = pMetodo==="media"?"Média":pMetodo==="mediana"?"Mediana":"Menor preço";
 
   // Aba 1: Identificação (itens I, II, V, VI da IN)
