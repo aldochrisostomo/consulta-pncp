@@ -6,6 +6,7 @@
 <title>Consulta PNCP — Licitações, Contratos e Atas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --paper:#F2F4F1; --card:#FFFFFF; --ink:#15282F; --ink-soft:#4A5E66;
@@ -101,6 +102,32 @@
   .item-situacao{font-size:11px;color:var(--ink-soft)}
   .itens-resumo{font-size:12px;color:var(--ink-soft);margin-bottom:8px}
   .itens-carregando{font-family:var(--mono);font-size:12.5px;color:var(--ink-soft);padding:6px 0}
+
+  /* Pesquisa de preços */
+  .preco-add{font-size:13px;font-weight:600;color:#fff;background:var(--green);border:none;
+    border-radius:6px;padding:6px 14px;cursor:pointer}
+  .preco-add:disabled{background:var(--ink-soft);cursor:default}
+  .preco-add.naCesta{background:var(--green-dark)}
+  .cesta-tabela{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+  .cesta-tabela th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--ink-soft);padding:6px 8px;border-bottom:1.5px solid var(--line)}
+  .cesta-tabela td{padding:7px 8px;border-bottom:1px solid var(--paper);vertical-align:top}
+  .cesta-tabela tr.excluido{opacity:.45;text-decoration:line-through}
+  .cesta-tabela tr.outlier-baixo{background:#FBEFED}
+  .cesta-tabela tr.outlier-alto{background:#FBF3E3}
+  .badge-outlier{font-family:var(--mono);font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;white-space:nowrap}
+  .badge-baixo{background:#F4C7C0;color:var(--red)}
+  .badge-alto{background:#F0DCB0;color:var(--amber)}
+  .cesta-rem{border:none;background:none;color:var(--red);cursor:pointer;font-size:14px;font-weight:600}
+  .calc-cards{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0}
+  .calc-card{flex:1;min-width:140px;background:var(--card);border:1.5px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer}
+  .calc-card.escolhido{border-color:var(--green);border-width:2px;background:#EAF5EF}
+  .calc-card .rot{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft)}
+  .calc-card .val{font-family:var(--mono);font-size:18px;font-weight:600;color:var(--green-dark);margin-top:4px}
+  .calc-card .obs{font-size:11px;color:var(--ink-soft);margin-top:2px}
+  .btn-gerar{padding:11px 24px;font-size:15px;font-weight:600;background:var(--ink);color:#fff;
+    border:none;border-radius:6px;cursor:pointer;margin-top:8px}
+  .btn-gerar:hover{background:#000}
 
   .paginacao{display:flex;gap:8px;justify-content:center;margin:20px 0}
   .paginacao button{padding:8px 18px;font-weight:600;background:#fff;border:1.5px solid var(--ink);border-radius:6px;cursor:pointer}
@@ -300,6 +327,52 @@
   </footer>
 </main>
 
+<!-- SERVIÇO: Pesquisa de Preços -->
+<main class="wrap" id="servico-precos" hidden>
+  <div class="servico-cabecalho">
+    <span class="nome-servico">Pesquisa de Preços</span>
+  </div>
+
+  <!-- Objeto da pesquisa -->
+  <section class="filtros" aria-label="Objeto e busca">
+    <label class="campo" style="flex:2"><span>Objeto da pesquisa <small>(descrição do que será contratado)</small></span>
+      <input type="text" id="pObjeto" placeholder="ex.: Notebook i5 16GB para uso administrativo" style="min-width:280px">
+    </label>
+    <label class="campo"><span>Buscar item no PNCP</span>
+      <input type="text" id="pBusca" placeholder="ex.: notebook" style="min-width:180px">
+    </label>
+    <label class="campo"><span>Região <small>(opcional)</small></span>
+      <select id="pUf"></select>
+    </label>
+    <button id="pBtnBuscar">Buscar preços</button>
+  </section>
+
+  <div id="pStatusMsg" role="status"></div>
+  <div class="lista" id="pLista"></div>
+  <div class="paginacao" id="pPaginacao" hidden>
+    <button id="pBtnAnt">← Anterior</button>
+    <button id="pBtnProx">Próxima →</button>
+  </div>
+
+  <!-- Cesta de preços -->
+  <section id="pCestaArea" hidden style="margin-top:24px">
+    <h3 style="font-size:18px;font-weight:800;margin:0 0 4px;border-top:3px solid var(--ink);padding-top:16px">
+      Cesta de preços <span id="pCestaContador" style="font-family:var(--mono);font-size:13px;font-weight:400;color:var(--ink-soft)"></span>
+    </h3>
+    <div id="pAvisoMinimo"></div>
+    <div id="pCesta"></div>
+
+    <!-- Painel de cálculo -->
+    <div id="pCalculo" hidden></div>
+  </section>
+
+  <footer>
+    Metodologia conforme Lei 14.133/2021 e IN SEGES/ME 65/2021, com base no Manual de Pesquisa de Preços do STJ (4ª ed.).
+    Fontes: contratações públicas do PNCP (parâmetro preferencial — art. 5º, II). Outliers sinalizados pela regra de 75%/125% da média.
+    O documento gerado contém os itens do art. 3º da IN 65/2021; campos como responsável e justificativas devem ser preenchidos por você.
+  </footer>
+</main>
+
 <script>
 const BASE = "https://pncp.gov.br/api/consulta";
 
@@ -319,8 +392,15 @@ const SERVICOS = [
     desc: "Encontre atas de registro de preços vigentes e disponíveis para carona, com órgão gerenciador, prazo de vigência e condição de adesão.",
     pronto: true,
   },
+  {
+    id: "precos",
+    icone: "📊",
+    titulo: "Pesquisa de Preços",
+    desc: "Monte uma cesta de preços de contratações públicas reais e gere a planilha de pesquisa conforme a Lei 14.133/2021 e a IN 65/2021, com média, mediana, menor valor e tratamento de outliers.",
+    pronto: true,
+  },
   // Próximos serviços entram aqui conforme forem construídos:
-  // Artefatos para Modelo, Pesquisa de Preços
+  // Artefatos para Modelo
 ];
 
 const ABAS = [
@@ -388,6 +468,7 @@ function irParaHub(){
   // Esconde todos os serviços e mostra o catálogo
   $("servico-buscador").hidden = true;
   $("servico-atas").hidden = true;
+  $("servico-precos").hidden = true;
   $("abas").hidden = true;
   $("btnInicio").hidden = true;
   $("hub").hidden = false;
@@ -403,6 +484,9 @@ function abrirServico(id){
   } else if(id==="atas"){
     $("servico-atas").hidden = false;
     if(!atasIniciado){ initAtas(); atasIniciado = true; }
+  } else if(id==="precos"){
+    $("servico-precos").hidden = false;
+    if(!precosIniciado){ initPrecos(); precosIniciado = true; }
   }
   window.scrollTo(0,0);
 }
@@ -1364,6 +1448,325 @@ async function alternarItensAta(botao, cnpj, ano, seqCompra, seqAta, idArea){
       <a href="https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seqCompra}/itens"
       target="_blank" rel="noreferrer" style="color:var(--green)">abrir direto ↗</a></div>`;
   }
+}
+
+// ══════════════════════════════════════════════════════
+// SERVIÇO: Pesquisa de Preços (metodologia STJ / IN 65)
+// ══════════════════════════════════════════════════════
+let precosIniciado = false;
+let pDados = null;        // resultados da busca de itens
+let pPagina = 1;
+let pCarregando = false;
+let pMetodo = "media";    // media | mediana | menor
+let cesta = [];           // [{id, descricao, valorUnit, unidade, orgao, uf, municipio, data, controle, link, excluido}]
+
+function initPrecos(){
+  $("pUf").innerHTML = UFS.map(s=>`<option value="${s}">${s||"Todas as regiões"}</option>`).join("");
+  $("pBtnBuscar").onclick = ()=> buscarPrecos(1);
+  $("pBusca").onkeydown = (e)=>{ if(e.key==="Enter") buscarPrecos(1); };
+  $("pBtnAnt").onclick = ()=> buscarPrecos(pPagina-1);
+  $("pBtnProx").onclick = ()=> buscarPrecos(pPagina+1);
+  $("pLista").innerHTML = `<div class="vazio">Descreva o objeto, busque um item (ex.: "notebook")
+    e adicione os preços de contratações públicas à sua cesta.</div>`;
+  renderCesta();
+}
+
+// Busca licitações por palavra (via /api/search), para depois abrir os itens
+async function buscarPrecos(pg){
+  if(pCarregando) return;
+  const termo = $("pBusca").value.trim();
+  if(!termo){ $("pStatusMsg").innerHTML = `<p class="resumo">Digite um item para buscar (ex.: notebook).</p>`; return; }
+  pCarregando = true; pPagina = Math.max(1,pg);
+  $("pBtnBuscar").disabled = true; $("pBtnBuscar").textContent = "Buscando…";
+  $("pStatusMsg").innerHTML = `<p class="resumo">Procurando contratações com “${esc(termo)}”…</p>`;
+
+  const p = new URLSearchParams({
+    q: termo, tipos_documento: "edital", ordenacao: "-data",
+    pagina: String(pPagina), tam_pagina: "20", status: "todos",
+  });
+  if($("pUf").value) p.set("ufs", $("pUf").value);
+
+  try{
+    const r = await fetch(`${SEARCH}/?${p}`, { headers:{ accept:"application/json" } });
+    if(!r.ok) throw new Error(`erro ${r.status}`);
+    const j = await r.json();
+    pDados = { itens: j.items||[], total: j.total||0, totalPaginas: Math.ceil((j.total||0)/20) };
+    renderBuscaPrecos();
+  }catch(e){
+    pDados = null; $("pLista").innerHTML = "";
+    $("pStatusMsg").innerHTML = `<div class="erro"><strong>Erro na busca.</strong> ${esc(e.message)}</div>`;
+  }finally{
+    pCarregando = false;
+    $("pBtnBuscar").disabled = false; $("pBtnBuscar").textContent = "Buscar preços";
+  }
+}
+
+function renderBuscaPrecos(){
+  if(!pDados) return;
+  const { itens, total, totalPaginas } = pDados;
+  $("pStatusMsg").innerHTML = `<p class="resumo">${total.toLocaleString("pt-BR")} contratação(ões) encontradas ·
+    abra os itens e adicione os preços à cesta${totalPaginas>1?` · página ${pPagina} de ${totalPaginas}`:""}</p>`;
+  if(itens.length===0){
+    $("pLista").innerHTML = `<div class="vazio">Nada encontrado. Tente outro termo ou remova o filtro de região.</div>`;
+  } else {
+    $("pLista").innerHTML = itens.map(cardBuscaPreco).join("");
+  }
+  $("pPaginacao").hidden = totalPaginas<=1;
+  $("pBtnAnt").disabled = pPagina<=1;
+  $("pBtnProx").disabled = pPagina>=totalPaginas;
+}
+
+function cardBuscaPreco(it){
+  const m = String(it.item_url||"").match(/\/compras\/(\d{14})\/(\d{4})\/(\d+)/);
+  const coord = m ? { cnpj:m[1], ano:m[2], seq:m[3] } : null;
+  const local = [it.municipio_nome, it.uf].filter(Boolean).join(" – ");
+  const idItens = coord ? `pitens-${coord.cnpj}-${coord.ano}-${coord.seq}` : "";
+  return `<article>
+    <div class="canhoto"><span>${esc(it.numero_controle_pncp||"PNCP")}</span></div>
+    <div class="corpo">
+      <div class="tags">
+        ${it.modalidade_licitacao_nome?`<span class="tag">${esc(it.modalidade_licitacao_nome)}</span>`:""}
+        ${it.uf?`<span class="tag cinza">${esc(it.uf)}</span>`:""}
+      </div>
+      <p class="objeto">${esc((it.description||"").slice(0,240))}</p>
+      <div class="detalhes">
+        ${it.orgao_nome?`<div><b>Órgão:</b> ${esc(it.orgao_nome)}</div>`:""}
+        ${local?`<div><b>Local:</b> ${esc(local)}</div>`:""}
+      </div>
+      <div class="rodape-card">
+        ${coord?`<button class="btn-itens" onclick="abrirItensPreco(this,'${coord.cnpj}','${coord.ano}','${coord.seq}','${idItens}')">Ver itens e adicionar preços</button>`:""}
+      </div>
+      ${coord?`<div class="itens-area" id="${idItens}" hidden></div>`:""}
+    </div>
+  </article>`;
+}
+
+// Abre os itens de uma contratação, com botão "adicionar à cesta" em cada um
+const cachePItens = {};
+async function abrirItensPreco(botao, cnpj, ano, seq, idArea){
+  const area = document.getElementById(idArea);
+  if(!area) return;
+  if(!area.hidden){ area.hidden=true; botao.textContent="Ver itens e adicionar preços"; return; }
+  area.hidden=false; botao.textContent="Ocultar itens";
+  const chave = `${cnpj}/${ano}/${seq}`;
+  if(cachePItens[chave]){ area.innerHTML = renderItensPreco(cachePItens[chave], cnpj, ano, seq); return; }
+  area.innerHTML = `<div class="itens-carregando">Carregando itens…</div>`;
+  try{
+    const r = await fetch(`https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/itens`, { headers:{accept:"application/json"} });
+    if(!r.ok) throw new Error(`erro ${r.status}`);
+    const itens = await r.json();
+    cachePItens[chave] = Array.isArray(itens)?itens:[];
+    // guarda metadados da contratação para a cesta
+    cachePItens[chave]._meta = metaDaBusca(cnpj, ano, seq);
+    area.innerHTML = renderItensPreco(cachePItens[chave], cnpj, ano, seq);
+  }catch(e){
+    area.innerHTML = `<div class="itens-carregando">Não foi possível carregar os itens (${esc(e.message)}).</div>`;
+  }
+}
+
+function metaDaBusca(cnpj, ano, seq){
+  const it = (pDados?.itens||[]).find(x=> String(x.item_url||"").includes(`/${cnpj}/${ano}/${seq}`));
+  return it ? { orgao:it.orgao_nome, uf:it.uf, municipio:it.municipio_nome,
+    controle:it.numero_controle_pncp, data:it.data_publicacao_pncp,
+    link:`https://pncp.gov.br/app/editais/${cnpj}/${ano}/${seq}` } : {};
+}
+
+function renderItensPreco(itens, cnpj, ano, seq){
+  if(!itens || itens.length===0) return `<div class="itens-carregando">Esta contratação não tem itens cadastrados.</div>`;
+  const termo = semAcento($("pBusca").value.trim());
+  const meta = itens._meta || {};
+  const linhas = itens.map((it,idx)=>{
+    const desc = it.descricao||"(sem descrição)";
+    const combina = termo && semAcento(desc).includes(termo);
+    const unit = it.valorUnitarioEstimado;
+    const idCesta = `${cnpj}-${ano}-${seq}-${it.numeroItem||idx}`;
+    const naCesta = cesta.some(c=> c.id===idCesta);
+    return `<tr class="${combina?'destaque':''}">
+      <td>${esc(desc)}${it.unidadeMedida?`<div class="item-situacao">${esc(it.unidadeMedida.trim())}</div>`:""}</td>
+      <td style="text-align:right" class="item-unit">${unit!=null?brl(unit):"—"}</td>
+      <td style="text-align:right">${unit!=null?`<button class="preco-add ${naCesta?'naCesta':''}" id="add-${idCesta}"
+        onclick="addCesta('${idCesta}', ${JSON.stringify(desc).replace(/"/g,'&quot;')}, ${unit}, ${JSON.stringify((it.unidadeMedida||'').trim()).replace(/"/g,'&quot;')}, '${cnpj}','${ano}','${seq}')">${naCesta?'✓ Na cesta':'+ Cesta'}</button>`:"—"}</td>
+    </tr>`;
+  }).join("");
+  return `<table class="itens-tabela"><thead><tr><th>Item</th>
+    <th style="text-align:right">Valor unit.</th><th style="text-align:right">Ação</th></tr></thead>
+    <tbody>${linhas}</tbody></table>`;
+}
+
+function addCesta(id, descricao, valorUnit, unidade, cnpj, ano, seq){
+  if(cesta.some(c=>c.id===id)) return; // já está
+  const meta = (cachePItens[`${cnpj}/${ano}/${seq}`]||{})._meta || {};
+  cesta.push({ id, descricao, valorUnit:Number(valorUnit), unidade,
+    orgao:meta.orgao||"", uf:meta.uf||"", municipio:meta.municipio||"",
+    data:meta.data||"", controle:meta.controle||"", link:meta.link||"", excluido:false });
+  const btn = document.getElementById(`add-${id}`);
+  if(btn){ btn.textContent="✓ Na cesta"; btn.classList.add("naCesta"); }
+  renderCesta();
+}
+
+function removerDaCesta(id){
+  cesta = cesta.filter(c=>c.id!==id);
+  const btn = document.getElementById(`add-${id}`);
+  if(btn){ btn.textContent="+ Cesta"; btn.classList.remove("naCesta"); }
+  renderCesta();
+}
+
+function toggleExcluir(id){
+  const c = cesta.find(x=>x.id===id);
+  if(c){ c.excluido = !c.excluido; renderCesta(); }
+}
+
+// Cálculo estatístico considerando só os não-excluídos
+function calcular(){
+  const validos = cesta.filter(c=>!c.excluido).map(c=>c.valorUnit);
+  if(validos.length===0) return null;
+  const soma = validos.reduce((a,b)=>a+b,0);
+  const media = soma/validos.length;
+  const ord = [...validos].sort((a,b)=>a-b);
+  const meio = Math.floor(ord.length/2);
+  const mediana = ord.length%2 ? ord[meio] : (ord[meio-1]+ord[meio])/2;
+  const menor = ord[0];
+  return { n:validos.length, media, mediana, menor };
+}
+
+// Marca outliers pela regra STJ: <75% ou >125% da média dos DEMAIS
+function marcarOutliers(){
+  const ativos = cesta.filter(c=>!c.excluido);
+  ativos.forEach(c=>{
+    const demais = ativos.filter(x=>x!==c).map(x=>x.valorUnit);
+    if(demais.length===0){ c.outlier=null; return; }
+    const mediaDemais = demais.reduce((a,b)=>a+b,0)/demais.length;
+    if(c.valorUnit < 0.75*mediaDemais) c.outlier="baixo";
+    else if(c.valorUnit > 1.25*mediaDemais) c.outlier="alto";
+    else c.outlier=null;
+  });
+}
+
+function renderCesta(){
+  $("pCestaArea").hidden = cesta.length===0;
+  if(cesta.length===0){ return; }
+  marcarOutliers();
+  const calc = calcular();
+  const ativos = cesta.filter(c=>!c.excluido).length;
+
+  $("pCestaContador").textContent = `· ${cesta.length} preço(s), ${ativos} considerado(s) no cálculo`;
+
+  // Aviso do mínimo de 3
+  $("pAvisoMinimo").innerHTML = ativos < 3
+    ? `<div class="itens-resumo" style="color:var(--amber);font-weight:600">⚠ A IN 65/2021 exige no mínimo 3 preços válidos.
+       Com menos de 3, é necessária justificativa da autoridade competente (a planilha registrará isso).</div>`
+    : "";
+
+  // Tabela da cesta
+  const linhas = cesta.map(c=>{
+    const badge = c.excluido ? "" :
+      c.outlier==="baixo" ? `<span class="badge-outlier badge-baixo">inexequível?</span>` :
+      c.outlier==="alto"  ? `<span class="badge-outlier badge-alto">excessivo?</span>` : "";
+    const cls = c.excluido ? "excluido" : c.outlier==="baixo" ? "outlier-baixo" : c.outlier==="alto" ? "outlier-alto" : "";
+    return `<tr class="${cls}">
+      <td>${esc(c.descricao)} ${badge}<div class="item-situacao">${esc(c.orgao)}${c.controle?` · ${esc(c.controle)}`:""}</div></td>
+      <td>${esc(c.uf||"—")}</td>
+      <td>${c.data?dataBR(c.data):"—"}</td>
+      <td style="text-align:right" class="item-unit">${brl(c.valorUnit)}</td>
+      <td style="text-align:center"><label style="cursor:pointer;font-size:12px"><input type="checkbox" ${c.excluido?"":"checked"}
+        onchange="toggleExcluir('${c.id}')"> usar</label></td>
+      <td style="text-align:center"><button class="cesta-rem" onclick="removerDaCesta('${c.id}')" title="Remover">✕</button></td>
+    </tr>`;
+  }).join("");
+
+  let html = `<table class="cesta-tabela"><thead><tr>
+    <th>Item / Fonte</th><th>UF</th><th>Data</th><th style="text-align:right">Valor unit.</th>
+    <th style="text-align:center">Cálculo</th><th></th></tr></thead><tbody>${linhas}</tbody></table>`;
+
+  $("pCesta").innerHTML = html;
+
+  // Painel de cálculo
+  if(calc){
+    $("pCalculo").hidden = false;
+    $("pCalculo").innerHTML = `
+      <div class="calc-cards">
+        <div class="calc-card ${pMetodo==='media'?'escolhido':''}" onclick="escolherMetodo('media')">
+          <div class="rot">Média</div><div class="val">${brl(calc.media)}</div>
+          <div class="obs">${calc.n} preços</div></div>
+        <div class="calc-card ${pMetodo==='mediana'?'escolhido':''}" onclick="escolherMetodo('mediana')">
+          <div class="rot">Mediana</div><div class="val">${brl(calc.mediana)}</div>
+          <div class="obs">valor central</div></div>
+        <div class="calc-card ${pMetodo==='menor'?'escolhido':''}" onclick="escolherMetodo('menor')">
+          <div class="rot">Menor preço</div><div class="val">${brl(calc.menor)}</div>
+          <div class="obs">mais conservador</div></div>
+      </div>
+      <p style="font-size:13px;color:var(--ink-soft);margin:4px 0 0">
+        Método escolhido: <b>${pMetodo==='media'?'Média':pMetodo==='mediana'?'Mediana':'Menor preço'}</b>
+        → preço estimado <b style="color:var(--green-dark)">${brl(calc[pMetodo])}</b>.
+        Marque/desmarque "usar" para tratar os outliers sinalizados.</p>
+      <button class="btn-gerar" onclick="gerarPlanilha()">📊 Gerar planilha da pesquisa de preços</button>`;
+  } else {
+    $("pCalculo").hidden = true;
+  }
+}
+
+function escolherMetodo(m){ pMetodo = m; renderCesta(); }
+
+// Gera a planilha Excel com os 7 itens da IN 65/2021
+function gerarPlanilha(){
+  const calc = calcular();
+  if(!calc){ alert("Adicione ao menos um preço válido."); return; }
+  marcarOutliers();
+  const hoje = new Date().toLocaleDateString("pt-BR");
+  const objeto = $("pObjeto").value.trim() || "[preencher: descrição do objeto]";
+  const metodoNome = pMetodo==="media"?"Média":pMetodo==="mediana"?"Mediana":"Menor preço";
+
+  // Aba 1: Identificação (itens I, II, V, VI da IN)
+  const ident = [
+    ["PESQUISA DE PREÇOS — Lei 14.133/2021 e IN SEGES/ME 65/2021"],
+    [],
+    ["I. Descrição do objeto", objeto],
+    ["II. Responsável pela pesquisa", "[preencher: nome e cargo do agente/equipe]"],
+    ["Data da pesquisa", hoje],
+    ["V. Método estatístico aplicado", metodoNome],
+    ["Preço unitário estimado", calc[pMetodo]],
+    [],
+    ["VI. Justificativas", "[preencher: justificar a metodologia e a desconsideração de valores inexequíveis/excessivos, se aplicável]"],
+    ["Observação sobre fontes", "Preços obtidos de contratações públicas (PNCP) — parâmetro preferencial (art. 5º, II, IN 65/2021)."],
+    [calc.n < 3 ? "ATENÇÃO: pesquisa com menos de 3 preços — exige justificativa da autoridade competente (art. 6º, §2º)." : ""],
+  ];
+
+  // Aba 2: Série de preços / fontes (itens III, IV, VII)
+  const cab = ["#","Descrição do item","Valor unitário (R$)","UF","Município","Órgão","Nº Controle PNCP","Data publicação","Link PNCP","Situação no cálculo","Sinalização"];
+  const linhas = cesta.map((c,i)=>[
+    i+1, c.descricao, c.valorUnit, c.uf, c.municipio, c.orgao, c.controle,
+    c.data?dataBR(c.data):"", c.link,
+    c.excluido?"DESCONSIDERADO":"considerado",
+    c.outlier==="baixo"?"possível inexequível (<75% da média)":c.outlier==="alto"?"possível excessivo (>125% da média)":"",
+  ]);
+
+  // Aba 3: Memória de cálculo (item VII)
+  const validos = cesta.filter(c=>!c.excluido);
+  const memoria = [
+    ["MEMÓRIA DE CÁLCULO"],
+    [],
+    ["Preços considerados (não desconsiderados)", validos.length],
+    ["Soma dos valores", validos.reduce((a,b)=>a+b.valorUnit,0)],
+    ["Média", calc.media],
+    ["Mediana", calc.mediana],
+    ["Menor preço", calc.menor],
+    [],
+    ["Método adotado", metodoNome],
+    ["PREÇO ESTIMADO FINAL", calc[pMetodo]],
+    [],
+    ["Critério de outliers (Manual STJ / TCU):"],
+    ["  Inexequível: valor < 75% da média dos demais"],
+    ["  Excessivamente elevado: valor > 125% da média dos demais"],
+    ["  Ressalva: preços de atas/contratos já executados não se presumem inexequíveis."],
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ident), "Identificação");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([cab,...linhas]), "Série de Preços");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(memoria), "Memória de Cálculo");
+
+  const nomeArq = `pesquisa_precos_${(objeto.slice(0,30).replace(/[^a-zA-Z0-9]/g,'_'))||'pncp'}.xlsx`;
+  XLSX.writeFile(wb, nomeArq);
 }
 
 init();
