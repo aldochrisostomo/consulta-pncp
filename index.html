@@ -130,6 +130,17 @@
     border:none;border-radius:6px;cursor:pointer;margin-top:8px}
   .btn-gerar:hover{background:#000}
 
+  /* Caixa de instruções (passo a passo) */
+  .ajuda-toggle{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;
+    color:var(--green);background:none;border:1.5px solid var(--green);border-radius:20px;
+    padding:5px 14px;cursor:pointer;font-family:var(--sans)}
+  .ajuda-toggle:hover{background:#EAF5EF}
+  .ajuda-box{background:#EAF5EF;border:1.5px solid var(--green);border-radius:10px;padding:18px 20px;margin:12px 0}
+  .ajuda-box h4{margin:0 0 10px;font-size:15px;font-weight:800;color:var(--green-dark)}
+  .ajuda-box ol{margin:0;padding-left:20px;font-size:13.5px;line-height:1.6;color:var(--ink)}
+  .ajuda-box li{margin-bottom:6px}
+  .ajuda-box .nota{font-size:12.5px;color:var(--ink-soft);margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+
   .paginacao{display:flex;gap:8px;justify-content:center;margin:20px 0}
   .paginacao button{padding:8px 18px;font-weight:600;background:#fff;border:1.5px solid var(--ink);border-radius:6px;cursor:pointer}
   .paginacao button:disabled{color:var(--line);border-color:var(--line);background:var(--paper);cursor:default}
@@ -332,12 +343,35 @@
 <main class="wrap" id="servico-precos" hidden>
   <div class="servico-cabecalho">
     <span class="nome-servico">Pesquisa de Preços</span>
+    <button class="ajuda-toggle" id="pBtnAjuda" onclick="toggleAjudaPrecos()">ℹ Saiba como fazer a pesquisa de preços</button>
+  </div>
+
+  <div class="ajuda-box" id="pAjuda" hidden>
+    <h4>Passo a passo da pesquisa de preços</h4>
+    <ol>
+      <li><b>Busque o item:</b> no campo "O que buscar no PNCP", digite um termo (ex.: "notebook") e clique em <b>Buscar preços</b>. Use a Região/Esfera se quiser restringir.</li>
+      <li><b>Abra os itens:</b> em cada contratação dos resultados, clique em "Ver itens e adicionar preços". Se quiser conferir o Termo de Referência, use o link "Ver no PNCP".</li>
+      <li><b>Monte a cesta:</b> clique em "+ Cesta" nos preços de itens comparáveis ao seu objeto. Reúna pelo menos <b>3 preços</b> válidos (exigência da IN 65/2021).</li>
+      <li><b>Trate os outliers:</b> o app sinaliza preços possivelmente inexequíveis (&lt;75% da média) ou excessivos (&gt;125%). Desmarque "usar" nos que decidir desconsiderar.</li>
+      <li><b>Escolha o método:</b> clique em Média, Mediana ou Menor preço — o STJ admite os três; você justifica a escolha.</li>
+      <li><b>Gere a planilha:</b> clique em "Gerar planilha" para baixar o documento com as fontes, a memória de cálculo e os campos da IN 65 (preencha o responsável e as justificativas).</li>
+    </ol>
+    <div class="nota">Preferência legal: contratações públicas (PNCP) são o parâmetro prioritário (art. 5º, II). Atente às peculiaridades regionais quando o objeto for sensível a frete/mão de obra local.</div>
   </div>
 
   <!-- Objeto da pesquisa -->
   <section class="filtros" aria-label="Objeto e busca">
     <label class="campo" style="flex:2"><span>1. O que buscar no PNCP <small>(digite e clique em Buscar)</small></span>
       <input type="text" id="pBusca" placeholder="ex.: notebook" style="min-width:240px">
+    </label>
+    <label class="campo"><span>Esfera <small>(opcional)</small></span>
+      <select id="pEsfera">
+        <option value="">Todas</option>
+        <option value="F">Federal</option>
+        <option value="E">Estadual</option>
+        <option value="M">Municipal</option>
+        <option value="D">Distrital</option>
+      </select>
     </label>
     <label class="campo"><span>Região <small>(opcional)</small></span>
       <select id="pUf"></select>
@@ -1466,6 +1500,11 @@ let pCarregando = false;
 let pMetodo = "media";    // media | mediana | menor
 let cesta = [];           // [{id, descricao, valorUnit, unidade, orgao, uf, municipio, data, controle, link, excluido}]
 
+function toggleAjudaPrecos(){
+  const box = $("pAjuda");
+  box.hidden = !box.hidden;
+}
+
 function initPrecos(){
   $("pUf").innerHTML = UFS.map(s=>`<option value="${s}">${s||"Todas as regiões"}</option>`).join("");
   $("pBtnBuscar").onclick = ()=> buscarPrecos(1);
@@ -1491,6 +1530,7 @@ async function buscarPrecos(pg){
     pagina: String(pPagina), tam_pagina: "20", status: "todos",
   });
   if($("pUf").value) p.set("ufs", $("pUf").value);
+  if($("pEsfera").value) p.set("esferas", $("pEsfera").value);
 
   try{
     const r = await fetch(`${SEARCH}/?${p}`, { headers:{ accept:"application/json" } });
@@ -1540,7 +1580,10 @@ function cardBuscaPreco(it){
         ${local?`<div><b>Local:</b> ${esc(local)}</div>`:""}
       </div>
       <div class="rodape-card">
-        ${coord?`<button class="btn-itens" onclick="abrirItensPreco(this,'${coord.cnpj}','${coord.ano}','${coord.seq}','${idItens}')">Ver itens e adicionar preços</button>`:""}
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          ${coord?`<button class="btn-itens" onclick="abrirItensPreco(this,'${coord.cnpj}','${coord.ano}','${coord.seq}','${idItens}')">Ver itens e adicionar preços</button>`:""}
+          ${coord?`<a class="link-pncp" href="https://pncp.gov.br/app/editais/${coord.cnpj}/${coord.ano}/${coord.seq}" target="_blank" rel="noreferrer">Ver no PNCP (edital/TR) ↗</a>`:""}
+        </div>
       </div>
       ${coord?`<div class="itens-area" id="${idItens}" hidden></div>`:""}
     </div>
@@ -1720,58 +1763,137 @@ function gerarPlanilha(){
   marcarOutliers();
   const hoje = new Date().toLocaleDateString("pt-BR");
   const objeto = $("pObjeto").value.trim() || $("pBusca").value.trim() || "[preencher: descrição do objeto]";
-  const metodoNome = pMetodo==="media"?"Média":pMetodo==="mediana"?"Mediana":"Menor preço";
 
-  // Aba 1: Identificação (itens I, II, V, VI da IN)
-  const ident = [
-    ["PESQUISA DE PREÇOS — Lei 14.133/2021 e IN SEGES/ME 65/2021"],
-    [],
-    ["I. Descrição do objeto", objeto],
-    ["II. Responsável pela pesquisa", "[preencher: nome e cargo do agente/equipe]"],
-    ["Data da pesquisa", hoje],
-    ["V. Método estatístico aplicado", metodoNome],
-    ["Preço unitário estimado", calc[pMetodo]],
-    [],
-    ["VI. Justificativas", "[preencher: justificar a metodologia e a desconsideração de valores inexequíveis/excessivos, se aplicável]"],
-    ["Observação sobre fontes", "Preços obtidos de contratações públicas (PNCP) — parâmetro preferencial (art. 5º, II, IN 65/2021)."],
-    [calc.n < 3 ? "ATENÇÃO: pesquisa com menos de 3 preços — exige justificativa da autoridade competente (art. 6º, §2º)." : ""],
-  ];
+  // ── Aba "Série de Preços" ─────────────────────────────
+  // É a aba de dados: cada linha é um preço da cesta.
+  // As fórmulas das outras abas referenciam esta.
+  const S = "Série de Preços"; // nome da aba de dados
+  const LINHA_INI = 3;          // primeira linha de dados (após cabeçalho em linha 2)
+  const validos = cesta.filter(c=>!c.excluido);
+  const N = validos.length;     // quantidade de preços considerados
 
-  // Aba 2: Série de preços / fontes (itens III, IV, VII)
-  const cab = ["#","Descrição do item","Valor unitário (R$)","UF","Município","Órgão","Nº Controle PNCP","Data publicação","Link PNCP","Situação no cálculo","Sinalização"];
-  const linhas = cesta.map((c,i)=>[
+  // Cabeçalho da série (linha 1 de dados = linha 2 da planilha)
+  const cabSerie = ["#","Descrição do item","Valor unit. (R$)","UF","Município",
+    "Órgão","Nº Controle PNCP","Data publicação","Link PNCP","Status","Sinalização outlier"];
+
+  const linhasSerie = cesta.map((c,i)=>[
     i+1, c.descricao, c.valorUnit, c.uf, c.municipio, c.orgao, c.controle,
     c.data?dataBR(c.data):"", c.link,
-    c.excluido?"DESCONSIDERADO":"considerado",
-    c.outlier==="baixo"?"possível inexequível (<75% da média)":c.outlier==="alto"?"possível excessivo (>125% da média)":"",
+    c.excluido?"DESCONSIDERADO":"Considerado",
+    c.outlier==="baixo"?"⚠ Possível inexequível (<75% da média)":c.outlier==="alto"?"⚠ Possível excessivo (>125% da média)":"",
   ]);
 
-  // Aba 3: Memória de cálculo (item VII)
-  const validos = cesta.filter(c=>!c.excluido);
-  const memoria = [
-    ["MEMÓRIA DE CÁLCULO"],
-    [],
-    ["Preços considerados (não desconsiderados)", validos.length],
-    ["Soma dos valores", validos.reduce((a,b)=>a+b.valorUnit,0)],
-    ["Média", calc.media],
-    ["Mediana", calc.mediana],
-    ["Menor preço", calc.menor],
-    [],
-    ["Método adotado", metodoNome],
-    ["PREÇO ESTIMADO FINAL", calc[pMetodo]],
-    [],
-    ["Critério de outliers (Manual STJ / TCU):"],
-    ["  Inexequível: valor < 75% da média dos demais"],
-    ["  Excessivamente elevado: valor > 125% da média dos demais"],
-    ["  Ressalva: preços de atas/contratos já executados não se presumem inexequíveis."],
-  ];
+  const wsSerie = XLSX.utils.aoa_to_sheet([["SÉRIE DE PREÇOS — FONTES CONSULTADAS"], cabSerie, ...linhasSerie]);
 
+  // ── Aba "Memória de Cálculo" ──────────────────────────
+  // Linhas de ancoragem para as fórmulas:
+  //   Método escolhido     → célula B4 desta aba (via validação de dados)
+  //   Média                → B6
+  //   Mediana              → B7
+  //   Menor preço          → B8
+  //   Preço estimado final → B10 (fórmula que lê B4 e retorna o valor certo)
+
+  // Referências à coluna C da Série de Preços (valores unitários, só os "Considerados")
+  // Usamos AVERAGEIF, MINIFS, e para mediana um array MEDIAN(IF(...))
+  const refColC  = `'${S}'!C${LINHA_INI}:C${LINHA_INI + cesta.length - 1}`;
+  const refColJ  = `'${S}'!J${LINHA_INI}:J${LINHA_INI + cesta.length - 1}`; // coluna Status
+
+  // Fórmulas reais — AVERAGEIF e MINIFS são suportadas pelo Excel 2016+
+  const fMedia   = `=AVERAGEIF(${refColJ},"Considerado",${refColC})`;
+  const fMenor   = `=MINIFS(${refColC},${refColJ},"Considerado")`;
+  // MEDIAN com IF precisa de Ctrl+Shift+Enter no Excel antigo; no xlsx ela vai como fórmula normal
+  const fMediana = `=MEDIAN(IF(${refColJ}="Considerado",${refColC}))`;
+  // Preço estimado: SWITCH no método escolhido em B4
+  const fEstimado = `=IF(B4="Média",B6,IF(B4="Mediana",B7,IF(B4="Menor preço",B8,"escolha o método")))`;
+
+  // Outlier-check: fórmulas que recontam os sinalizados
+  const refColK = `'${S}'!K${LINHA_INI}:K${LINHA_INI + cesta.length - 1}`;
+  const fQtdBaixo = `=COUNTIF(${refColK},"*inexequível*")`;
+  const fQtdAlto  = `=COUNTIF(${refColK},"*excessivo*")`;
+
+  const mem = XLSX.utils.aoa_to_sheet([
+    ["MEMÓRIA DE CÁLCULO — Pesquisa de Preços"],                            // A1
+    [],                                                                      // A2
+    ["Objeto da pesquisa:", objeto],                                         // A3
+    ["V. Método estatístico (escolha abaixo ↓):", "Média"],                 // A4  ← célula B4 = lista suspensa
+    [],                                                                      // A5
+    ["Média dos preços considerados:",   fMedia],                            // A6 → B6
+    ["Mediana dos preços considerados:", fMediana],                          // A7 → B7
+    ["Menor preço considerado:",         fMenor],                            // A8 → B8
+    [],                                                                      // A9
+    ["⭐ PREÇO UNITÁRIO ESTIMADO:",       fEstimado],                        // A10 → B10
+    [],
+    ["── Informações sobre a amostra ──"],
+    ["Total de preços na cesta:", cesta.length],
+    [`Total considerados no cálculo:`, N],
+    [`Total desconsiderados:`, cesta.length - N],
+    [`Itens sinalizados como possível inexequível:`, fQtdBaixo],
+    [`Itens sinalizados como possível excessivo:`, fQtdAlto],
+    [],
+    ["── Critério de outliers (Manual STJ / IN 65) ──"],
+    ["Inexequível:", "Valor < 75% da média dos demais preços"],
+    ["Excessivamente elevado:", "Valor > 125% da média dos demais preços"],
+    ["Ressalva:", "Preços de atas/contratos já executados não se presumem inexequíveis."],
+    ["Referência legal:", "Art. 6º, §1º e §2º, IN SEGES/ME 65/2021 · Manual STJ 4ª ed."],
+    [],
+    ["── Fonte dos preços ──"],
+    ["Parâmetro utilizado:", "Contratações similares de órgãos públicos (PNCP)"],
+    ["Base legal:", "Art. 5º, II, IN SEGES/ME 65/2021 (parâmetro preferencial)"],
+    ["Data da pesquisa:", hoje],
+  ]);
+
+  // Validação de dados em B4: lista suspensa Média / Mediana / Menor preço
+  if(!mem["!dataValidation"]) mem["!dataValidation"] = [];
+  mem["!dataValidation"].push({
+    sqref: "B4",
+    type: "list",
+    formula1: '"Média,Mediana,Menor preço"',
+    showDropDown: false,
+    showErrorMessage: true,
+    error: "Escolha: Média, Mediana ou Menor preço",
+    errorTitle: "Valor inválido",
+  });
+
+  // Formata B10 (preço estimado) em negrito via estilo
+  if(!mem["B10"]) mem["B10"] = {};
+  mem["B10"].s = { font:{ bold:true, sz:14, color:{ rgb:"155843" } } };
+
+  // ── Aba "Identificação" ───────────────────────────────
+  const ident = XLSX.utils.aoa_to_sheet([
+    ["PESQUISA DE PREÇOS — Lei 14.133/2021 e IN SEGES/ME 65/2021"],
+    [],
+    ["I. Descrição do objeto:", objeto],
+    ["II. Responsável pela pesquisa:", "[preencher: nome e cargo do agente/equipe de planejamento]"],
+    ["   Data da pesquisa:", hoje],
+    [],
+    ["III. Caracterização das fontes:",
+     "Preços obtidos de contratações públicas no PNCP (Portal Nacional de Contratações Públicas). Parâmetro preferencial — art. 5º, II, IN 65/2021."],
+    ["   Quantidade de fontes consultadas (série):", cesta.length],
+    ["   Quantidade considerada no cálculo:", N],
+    [],
+    ["IV. Série de preços coletados:", "Ver aba 'Série de Preços'"],
+    [],
+    ["V. Método estatístico e preço estimado:", "Ver aba 'Memória de Cálculo' (célula B4 = método; B10 = preço estimado)"],
+    [],
+    ["VI. Justificativas:"],
+    ["   Escolha do método:", "[preencher: justificar a opção por Média, Mediana ou Menor preço]"],
+    ["   Exclusão de preços:", N < cesta.length
+      ? "[preencher: justificar os "+( cesta.length-N)+" preços desconsiderados — outliers, dados inconsistentes, etc.]"
+      : "Nenhum preço foi desconsiderado."],
+    [N < 3 ? "   ⚠ ATENÇÃO:" : "", N < 3
+      ? "Pesquisa com menos de 3 preços válidos — exige justificativa da autoridade competente (art. 6º, §2º, IN 65/2021)."
+      : ""],
+    [],
+    ["VII. Memória de cálculo:", "Ver aba 'Memória de Cálculo'"],
+  ]);
+
+  // ── Montagem final ────────────────────────────────────
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ident), "Identificação");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([cab,...linhas]), "Série de Preços");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(memoria), "Memória de Cálculo");
+  XLSX.utils.book_append_sheet(wb, ident,   "Identificação");
+  XLSX.utils.book_append_sheet(wb, mem,     "Memória de Cálculo");
+  XLSX.utils.book_append_sheet(wb, wsSerie, "Série de Preços");
 
-  const nomeArq = `pesquisa_precos_${(objeto.slice(0,30).replace(/[^a-zA-Z0-9]/g,'_'))||'pncp'}.xlsx`;
+  const nomeArq = `pesquisa_precos_${(objeto.slice(0,30).replace(/[^a-zA-Z0-9]/g,"_"))||"pncp"}.xlsx`;
   XLSX.writeFile(wb, nomeArq);
 }
 
