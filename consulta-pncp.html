@@ -250,6 +250,56 @@
   </footer>
 </main>
 
+<!-- SERVIÇO: Atas para Adesão -->
+<main class="wrap" id="servico-atas" hidden>
+  <div class="servico-cabecalho">
+    <span class="nome-servico">Atas para Adesão</span>
+  </div>
+  <section class="filtros" aria-label="Filtros de atas">
+    <label class="campo"><span>Palavra-chave <small>(objeto da ata)</small></span>
+      <input type="text" id="aPalavra" placeholder="ex.: notebook, merenda, veículo…" style="min-width:230px">
+    </label>
+    <label class="campo"><span>Status</span>
+      <select id="aStatus">
+        <option value="vigente">Vigentes</option>
+        <option value="todos">Todas</option>
+      </select>
+    </label>
+    <label class="campo"><span>Adesão</span>
+      <select id="aAdesao">
+        <option value="">Todas</option>
+        <option value="true">Só permite adesão</option>
+      </select>
+    </label>
+    <label class="campo"><span>Esfera</span>
+      <select id="aEsfera">
+        <option value="">Todas</option>
+        <option value="F">Federal</option>
+        <option value="E">Estadual</option>
+        <option value="M">Municipal</option>
+        <option value="D">Distrital</option>
+      </select>
+    </label>
+    <label class="campo"><span>UF</span>
+      <select id="aUf"></select>
+    </label>
+    <button id="aBtnBuscar">Buscar</button>
+  </section>
+
+  <div id="aStatusMsg" role="status"></div>
+  <div class="lista" id="aLista"></div>
+  <div class="paginacao" id="aPaginacao" hidden>
+    <button id="aBtnAnt">← Anterior</button>
+    <button id="aBtnProx">Próxima →</button>
+  </div>
+
+  <footer>
+    Fonte: API pública do PNCP. Atas vigentes e "permite adesão" são filtradas pelo servidor.
+    O saldo disponível para carona não é exposto pelo PNCP — verifique no Compras.gov.br ou com o órgão gerenciador.
+    O campo de adesão tornou-se obrigatório em 11/05/2026; atas anteriores podem aparecer como "adesão não informada".
+  </footer>
+</main>
+
 <script>
 const BASE = "https://pncp.gov.br/api/consulta";
 
@@ -262,8 +312,15 @@ const SERVICOS = [
     desc: "Pesquise editais, contratos e atas em todo o PNCP por palavra-chave, órgão, modalidade e período. Ponto de partida para explorar contratações públicas.",
     pronto: true,
   },
+  {
+    id: "atas",
+    icone: "🤝",
+    titulo: "Atas para Adesão",
+    desc: "Encontre atas de registro de preços vigentes e disponíveis para carona, com órgão gerenciador, prazo de vigência e condição de adesão.",
+    pronto: true,
+  },
   // Próximos serviços entram aqui conforme forem construídos:
-  // Atas para Adesão, Artefatos para Modelo, Pesquisa de Preços
+  // Artefatos para Modelo, Pesquisa de Preços
 ];
 
 const ABAS = [
@@ -330,6 +387,7 @@ function renderHub(){
 function irParaHub(){
   // Esconde todos os serviços e mostra o catálogo
   $("servico-buscador").hidden = true;
+  $("servico-atas").hidden = true;
   $("abas").hidden = true;
   $("btnInicio").hidden = true;
   $("hub").hidden = false;
@@ -342,6 +400,9 @@ function abrirServico(id){
   if(id==="buscador"){
     $("servico-buscador").hidden = false;
     $("abas").hidden = false;
+  } else if(id==="atas"){
+    $("servico-atas").hidden = false;
+    if(!atasIniciado){ initAtas(); atasIniciado = true; }
   }
   window.scrollTo(0,0);
 }
@@ -1120,6 +1181,189 @@ function renderItens(itens){
       </tr></thead>
       <tbody>${linhas}</tbody>
     </table>`;
+}
+
+// ══════════════════════════════════════════════════════
+// SERVIÇO: Atas para Adesão
+// ══════════════════════════════════════════════════════
+let atasIniciado = false;
+let aDados = null;     // { itens, total, totalPaginas }
+let aPagina = 1;
+let aCarregando = false;
+
+function initAtas(){
+  // Preenche UF
+  $("aUf").innerHTML = UFS.map(s=>`<option value="${s}">${s||"Todas"}</option>`).join("");
+  $("aBtnBuscar").onclick = ()=> buscarAtas(1);
+  $("aPalavra").onkeydown = (e)=>{ if(e.key==="Enter") buscarAtas(1); };
+  $("aBtnAnt").onclick = ()=> buscarAtas(aPagina-1);
+  $("aBtnProx").onclick = ()=> buscarAtas(aPagina+1);
+  // Estado inicial
+  $("aLista").innerHTML = `<div class="vazio">Defina os filtros e clique em <b>Buscar</b>
+    para encontrar atas vigentes disponíveis para adesão.</div>`;
+}
+
+// Dias entre hoje e uma data (negativo = já passou)
+function diasAte(dataIso){
+  if(!dataIso) return null;
+  const fim = new Date(String(dataIso).slice(0,10) + "T23:59:59");
+  if(isNaN(fim)) return null;
+  const hoje = new Date();
+  return Math.round((fim - hoje) / (1000*60*60*24));
+}
+
+async function buscarAtas(pg){
+  if(aCarregando) return;
+  aCarregando = true; aPagina = Math.max(1, pg);
+  $("aBtnBuscar").disabled = true; $("aBtnBuscar").textContent = "Buscando…";
+  $("aStatusMsg").innerHTML = aDados ? "" : `<p class="resumo">Consultando o PNCP…</p>`;
+
+  const p = new URLSearchParams({
+    tipos_documento: "ata",
+    status: $("aStatus").value,            // vigente | todos
+    ordenacao: "-data",
+    pagina: String(aPagina),
+    tam_pagina: "20",
+  });
+  const termo = $("aPalavra").value.trim();
+  if(termo) p.set("q", termo);
+  if($("aAdesao").value) p.set("permite_adesao", "true");
+  if($("aEsfera").value) p.set("esferas", $("aEsfera").value);
+  if($("aUf").value) p.set("ufs", $("aUf").value);
+
+  try{
+    const r = await fetch(`${SEARCH}/?${p}`, { headers:{ accept:"application/json" } });
+    if(!r.ok) throw new Error(`A busca do PNCP retornou erro ${r.status}.`);
+    const j = await r.json();
+    // Descarta canceladas (rede de segurança)
+    const itens = (j.items || []).filter(it=> it.cancelado !== true);
+    aDados = { itens, total: j.total || itens.length,
+      totalPaginas: Math.ceil((j.total || itens.length)/20), descartadas: (j.items||[].length) };
+    renderAtas();
+  }catch(e){
+    aDados = null;
+    $("aLista").innerHTML = ""; $("aPaginacao").hidden = true;
+    const msg = e instanceof TypeError
+      ? "Não foi possível conectar à busca do PNCP. Verifique sua internet e tente de novo."
+      : e.message;
+    $("aStatusMsg").innerHTML = `<div class="erro"><strong>Algo deu errado.</strong> ${esc(msg)}</div>`;
+  }finally{
+    aCarregando = false;
+    $("aBtnBuscar").disabled = false; $("aBtnBuscar").textContent = "Buscar";
+  }
+}
+
+function renderAtas(){
+  if(!aDados) return;
+  const { itens, total, totalPaginas } = aDados;
+
+  $("aStatusMsg").innerHTML = `<p class="resumo">
+    ${total.toLocaleString("pt-BR")} ata(s) encontradas
+    ${$("aPalavra").value.trim() ? `para “${esc($("aPalavra").value.trim())}”` : ""}
+    ${totalPaginas>1 ? ` · página ${aPagina} de ${totalPaginas.toLocaleString("pt-BR")}` : ""}
+  </p>`;
+
+  if(itens.length===0){
+    $("aLista").innerHTML = `<div class="vazio">Nenhuma ata encontrada para esses filtros.
+      Tente ampliar (ex.: status "Todas" ou remover a UF).</div>`;
+  } else {
+    $("aLista").innerHTML = itens.map(cardAta).join("");
+  }
+  $("aPaginacao").hidden = totalPaginas<=1;
+  $("aBtnAnt").disabled = aPagina<=1;
+  $("aBtnProx").disabled = aPagina>=totalPaginas;
+}
+
+function cardAta(it){
+  const objeto = it.description || "(objeto não informado)";
+  const orgao = it.orgao_nome || "";
+  const unidade = it.unidade_nome || "";
+  const local = [it.municipio_nome, it.uf].filter(Boolean).join(" – ");
+  const esfera = it.esfera_nome || "";
+
+  // Coordenadas da ata a partir do item_url: /atas/CNPJ/ANO/SEQ_COMPRA/SEQ_ATA
+  const m = String(it._urlAta || it.item_url || "").match(/\/atas\/([0-9A-Za-z]{14})\/(\d{4})\/(\d+)\/(\d+)/);
+  const coord = m ? { cnpj:m[1], ano:m[2], seqCompra:m[3], seqAta:m[4] } : null;
+  const link = coord
+    ? `https://pncp.gov.br/app/atas/${coord.cnpj}/${coord.ano}/${coord.seqCompra}/${coord.seqAta}`
+    : null;
+
+  // Vigência e prazo
+  const dias = diasAte(it.data_fim_vigencia);
+  let etiquetaPrazo = "";
+  if(dias != null){
+    if(dias < 0) etiquetaPrazo = `<span class="tag cinza">Vencida</span>`;
+    else if(dias <= 90) etiquetaPrazo = `<span class="tag ambar">Vence em ${dias} dia${dias===1?"":"s"}</span>`;
+    else etiquetaPrazo = `<span class="tag">Vigente · ${dias} dias restantes</span>`;
+  }
+
+  // Adesão (true / false / null)
+  let etiquetaAdesao;
+  if(it.permite_adesao === true) etiquetaAdesao = `<span class="tag">Permite adesão</span>`;
+  else if(it.permite_adesao === false) etiquetaAdesao = `<span class="tag cinza">Não permite adesão</span>`;
+  else etiquetaAdesao = `<span class="tag cinza">Adesão não informada</span>`;
+
+  // Itens da ata (reutiliza o mesmo mecanismo do buscador)
+  const idItens = coord ? `aitens-${coord.cnpj}-${coord.ano}-${coord.seqCompra}-${coord.seqAta}` : "";
+  const podeItens = !!coord;
+
+  const linhas = [];
+  if(orgao)   linhas.push(`<div><b>Órgão gerenciador:</b> ${esc(orgao)}</div>`);
+  if(unidade) linhas.push(`<div><b>Unidade:</b> ${esc(unidade)}</div>`);
+  if(local)   linhas.push(`<div><b>Local:</b> ${esc(local)}</div>`);
+  if(it.data_inicio_vigencia)
+    linhas.push(`<div><b>Vigência:</b> ${dataBR(it.data_inicio_vigencia)} a ${dataBR(it.data_fim_vigencia)}</div>`);
+
+  return `<article>
+    <div class="canhoto"><span>${esc(it.numero_controle_pncp || "ATA")}</span></div>
+    <div class="corpo">
+      <div class="tags">
+        ${etiquetaPrazo}
+        ${etiquetaAdesao}
+        ${esfera ? `<span class="tag cinza">${esc(esfera)}</span>` : ""}
+        ${it.title ? `<span class="tag">${esc(it.title)}</span>` : ""}
+      </div>
+      <p class="objeto">${esc(objeto.length>280 ? objeto.slice(0,280)+"…" : objeto)}</p>
+      <div class="detalhes">${linhas.join("")}</div>
+      <div class="itens-resumo" style="margin-top:6px">
+        <b>Saldo para adesão:</b> não disponível no PNCP — verifique no Compras.gov.br ou com o órgão gerenciador.
+      </div>
+      <div class="rodape-card">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          ${podeItens ? `<button class="btn-itens" onclick="alternarItensAta(this,'${coord.cnpj}','${coord.ano}','${coord.seqCompra}','${coord.seqAta}','${idItens}')">Ver itens e preços</button>` : ""}
+          ${link ? `<a class="link-pncp" href="${link}" target="_blank" rel="noreferrer">Ver no PNCP ↗</a>` : ""}
+        </div>
+      </div>
+      ${podeItens ? `<div class="itens-area" id="${idItens}" hidden></div>` : ""}
+    </div>
+  </article>`;
+}
+
+// Itens de uma ata: endpoint específico de ata (com seq da ata)
+const cacheItensAta = {};
+async function alternarItensAta(botao, cnpj, ano, seqCompra, seqAta, idArea){
+  const area = document.getElementById(idArea);
+  if(!area) return;
+  if(!area.hidden){ area.hidden = true; botao.textContent = "Ver itens e preços"; return; }
+  area.hidden = false; botao.textContent = "Ocultar itens";
+
+  const chave = `${cnpj}/${ano}/${seqCompra}/${seqAta}`;
+  if(cacheItensAta[chave]){ area.innerHTML = renderItens(cacheItensAta[chave]); return; }
+
+  area.innerHTML = `<div class="itens-carregando">Carregando itens da ata…</div>`;
+  try{
+    // Itens da contratação que originou a ata
+    const url = `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seqCompra}/itens`;
+    const r = await fetch(url, { headers:{ accept:"application/json" } });
+    if(!r.ok) throw new Error(`erro ${r.status}`);
+    const itens = await r.json();
+    cacheItensAta[chave] = Array.isArray(itens) ? itens : [];
+    area.innerHTML = renderItens(cacheItensAta[chave]);
+  }catch(e){
+    area.innerHTML = `<div class="itens-carregando">Não foi possível carregar os itens (${esc(e.message)}).
+      <a href="https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seqCompra}/itens"
+      target="_blank" rel="noreferrer" style="color:var(--green)">abrir direto ↗</a></div>`;
+  }
 }
 
 init();
