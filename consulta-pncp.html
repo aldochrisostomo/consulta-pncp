@@ -2488,37 +2488,80 @@ async function buscarPrecos(pg){
 
 function renderBuscaPrecos(){
   if(!pDados) return;
-  const { itens, total, totalPaginas } = pDados;
+  const { total, totalPaginas } = pDados;
+  const termo = $("pBusca").value.trim();
+
+  // Ordena: 1º com resultado E correspondência, 2º com resultado, 3º sem resultado
+  const itens = [...pDados.itens].sort((a,b)=>{
+    const aTemResult = a.tem_resultado === true ? 1 : 0;
+    const bTemResult = b.tem_resultado === true ? 1 : 0;
+    // correspondência no objeto usando sinônimos (busca rápida, sem abrir itens)
+    const aCombina = termo ? (combinaComSinonimos(a.description||"", termo) ? 1 : 0) : 1;
+    const bCombina = termo ? (combinaComSinonimos(b.description||"", termo) ? 1 : 0) : 1;
+    // Prioridade: resultado+combina > resultado > combina > nada
+    const aPeso = aTemResult * 2 + aCombina;
+    const bPeso = bTemResult * 2 + bCombina;
+    return bPeso - aPeso;
+  });
+
   $("pStatusMsg").innerHTML = `<p class="resumo">${total.toLocaleString("pt-BR")} contratação(ões) encontradas ·
     abra os itens e adicione os preços à cesta${totalPaginas>1?` · página ${pPagina} de ${totalPaginas}`:""}</p>`;
   if(itens.length===0){
     $("pLista").innerHTML = `<div class="vazio">Nada encontrado. Tente outro termo ou remova o filtro de região.</div>`;
   } else {
-    $("pLista").innerHTML = itens.map(cardBuscaPreco).join("");
+    $("pLista").innerHTML = itens.map(it=>cardBuscaPreco(it, termo)).join("");
   }
   $("pPaginacao").hidden = totalPaginas<=1;
   $("pBtnAnt").disabled = pPagina<=1;
   $("pBtnProx").disabled = pPagina>=totalPaginas;
 }
 
-function cardBuscaPreco(it){
+function cardBuscaPreco(it, termo){
   const m = String(it.item_url||"").match(/\/compras\/(\d{14})\/(\d{4})\/(\d+)/);
   const coord = m ? { cnpj:m[1], ano:m[2], seq:m[3] } : null;
   const local = [it.municipio_nome, it.uf].filter(Boolean).join(" – ");
   const idItens = coord ? `pitens-${coord.cnpj}-${coord.ano}-${coord.seq}` : "";
+
+  // Indicadores de qualidade do resultado
+  const temResult = it.tem_resultado === true;
+  const combinaObjeto = termo ? combinaComSinonimos(it.description||"", termo) : true;
+
+  // Etiqueta de qualidade
+  let etiquetaQual = "";
+  if(temResult && combinaObjeto)
+    etiquetaQual = `<span class="tag" style="background:#EAF5EF;border-color:var(--green)">✓ Com resultado</span>`;
+  else if(temResult)
+    etiquetaQual = `<span class="tag cinza">Com resultado</span>`;
+  else if(combinaObjeto)
+    etiquetaQual = `<span class="tag cinza">Sem resultado registrado</span>`;
+  else
+    etiquetaQual = `<span class="tag" style="border-color:var(--amber);color:var(--amber)">⚠ Sem item correspondente</span>`;
+
+  // Aviso contextualizado quando não há correspondência no objeto
+  const avisoSemCorrespondencia = !combinaObjeto && termo ? `
+    <div style="background:#FBF3E3;border-left:3px solid var(--amber);padding:8px 12px;
+      margin-top:8px;font-size:12.5px;color:var(--ink);border-radius:0 4px 4px 0">
+      Esta contratação não tem itens com o nome <b>"${esc(termo)}"</b>, mas apareceu na busca porque
+      o motor de pesquisa do PNCP encontrou esse termo no texto do edital ou em outros campos do processo.
+      Muitas licitações mencionam o produto no objeto geral sem cadastrá-lo como item separado.
+      Se quiser verificar se há algo comparável, abra o edital pelo link "Ver no PNCP" e confira o Termo de Referência.
+    </div>` : "";
+
   return `<article>
     <div class="canhoto"><span>${esc(it.numero_controle_pncp||"PNCP")}</span></div>
     <div class="corpo">
       <div class="tags">
         ${it.modalidade_licitacao_nome?`<span class="tag">${esc(it.modalidade_licitacao_nome)}</span>`:""}
         ${it.uf?`<span class="tag cinza">${esc(it.uf)}</span>`:""}
+        ${etiquetaQual}
       </div>
       <p class="objeto">${esc((it.description||"").slice(0,240))}</p>
       <div class="detalhes">
         ${it.orgao_nome?`<div><b>Órgão:</b> ${esc(it.orgao_nome)}</div>`:""}
         ${local?`<div><b>Local:</b> ${esc(local)}</div>`:""}
       </div>
-      <div class="rodape-card">
+      ${avisoSemCorrespondencia}
+      <div class="rodape-card" style="margin-top:8px">
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           ${coord?`<button class="btn-itens" onclick="abrirItensPreco(this,'${coord.cnpj}','${coord.ano}','${coord.seq}','${idItens}')">Ver itens e adicionar preços</button>`:""}
           ${coord?`<a class="link-pncp" href="https://pncp.gov.br/app/editais/${coord.cnpj}/${coord.ano}/${coord.seq}" target="_blank" rel="noreferrer">Ver no PNCP (edital/TR) ↗</a>`:""}
@@ -2606,14 +2649,8 @@ function renderItensPreco(itens, cnpj, ano, seq){
   const combinam = termoBusca ? uteis.filter(it=> combinaComSinonimos(it.descricao||"", termoBusca)) : uteis;
   const outros   = termoBusca ? uteis.filter(it=>!combinaComSinonimos(it.descricao||"", termoBusca)) : [];
 
-  // Aviso de falsa correspondência (nenhum combina mesmo com sinônimos)
-  const avisoFalsaCorrespondencia = termoBusca && combinam.length === 0
-    ? `<div style="background:#FBF3E3;border:1.5px solid var(--amber);border-radius:8px;padding:10px 14px;
-        margin-bottom:10px;font-size:13px;color:var(--ink)">
-        <b>⚠ Atenção:</b> nenhum item desta contratação corresponde a "<b>${esc(termoBusca)}</b>" (incluindo sinônimos conhecidos).
-        Verifique se algum item abaixo é comparável ao seu objeto antes de adicionar à cesta.
-      </div>`
-    : "";
+  // Aviso de falsa correspondência já está no card da lista (antes de abrir os itens)
+  const avisoFalsaCorrespondencia = "";
 
   const renderLinha = (it,idx,destaque)=>{
     const desc = it.descricao||"(sem descrição)";
