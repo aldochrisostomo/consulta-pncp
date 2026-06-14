@@ -2491,17 +2491,20 @@ function renderBuscaPrecos(){
   const { total, totalPaginas } = pDados;
   const termo = $("pBusca").value.trim();
 
-  // Ordena: 1º com resultado E correspondência, 2º com resultado, 3º sem resultado
+  // Ordena por relevância:
+  // Peso 3: tem_resultado=true E título/objeto combina com sinônimos
+  // Peso 2: tem_resultado=true (mas objeto não menciona o item diretamente)
+  // Peso 1: sem resultado mas objeto combina
+  // Peso 0: sem resultado e sem correspondência
   const itens = [...pDados.itens].sort((a,b)=>{
-    const aTemResult = a.tem_resultado === true ? 1 : 0;
-    const bTemResult = b.tem_resultado === true ? 1 : 0;
-    // correspondência no objeto usando sinônimos (busca rápida, sem abrir itens)
-    const aCombina = termo ? (combinaComSinonimos(a.description||"", termo) ? 1 : 0) : 1;
-    const bCombina = termo ? (combinaComSinonimos(b.description||"", termo) ? 1 : 0) : 1;
-    // Prioridade: resultado+combina > resultado > combina > nada
-    const aPeso = aTemResult * 2 + aCombina;
-    const bPeso = bTemResult * 2 + bCombina;
-    return bPeso - aPeso;
+    const aTemResult = a.tem_resultado === true ? 2 : 0;
+    const bTemResult = b.tem_resultado === true ? 2 : 0;
+    // Combina no título (mais específico) ou no objeto
+    const textoA = [(a.title||""),(a.description||"")].join(" ");
+    const textoB = [(b.title||""),(b.description||"")].join(" ");
+    const aCombina = termo ? (combinaComSinonimos(textoA, termo) ? 1 : 0) : 1;
+    const bCombina = termo ? (combinaComSinonimos(textoB, termo) ? 1 : 0) : 1;
+    return (bTemResult + bCombina) - (aTemResult + aCombina);
   });
 
   $("pStatusMsg").innerHTML = `<p class="resumo">${total.toLocaleString("pt-BR")} contratação(ões) encontradas ·
@@ -2521,31 +2524,12 @@ function cardBuscaPreco(it, termo){
   const coord = m ? { cnpj:m[1], ano:m[2], seq:m[3] } : null;
   const local = [it.municipio_nome, it.uf].filter(Boolean).join(" – ");
   const idItens = coord ? `pitens-${coord.cnpj}-${coord.ano}-${coord.seq}` : "";
-
-  // Indicadores de qualidade do resultado
   const temResult = it.tem_resultado === true;
-  const combinaObjeto = termo ? combinaComSinonimos(it.description||"", termo) : true;
 
-  // Etiqueta de qualidade
-  let etiquetaQual = "";
-  if(temResult && combinaObjeto)
-    etiquetaQual = `<span class="tag" style="background:#EAF5EF;border-color:var(--green)">✓ Com resultado</span>`;
-  else if(temResult)
-    etiquetaQual = `<span class="tag cinza">Com resultado</span>`;
-  else if(combinaObjeto)
-    etiquetaQual = `<span class="tag cinza">Sem resultado registrado</span>`;
-  else
-    etiquetaQual = `<span class="tag" style="border-color:var(--amber);color:var(--amber)">⚠ Sem item correspondente</span>`;
-
-  // Aviso contextualizado quando não há correspondência no objeto
-  const avisoSemCorrespondencia = !combinaObjeto && termo ? `
-    <div style="background:#FBF3E3;border-left:3px solid var(--amber);padding:8px 12px;
-      margin-top:8px;font-size:12.5px;color:var(--ink);border-radius:0 4px 4px 0">
-      Esta contratação não tem itens com o nome <b>"${esc(termo)}"</b>, mas apareceu na busca porque
-      o motor de pesquisa do PNCP encontrou esse termo no texto do edital ou em outros campos do processo.
-      Muitas licitações mencionam o produto no objeto geral sem cadastrá-lo como item separado.
-      Se quiser verificar se há algo comparável, abra o edital pelo link "Ver no PNCP" e confira o Termo de Referência.
-    </div>` : "";
+  // Etiqueta simples baseada apenas em dados confiáveis do JSON
+  const etiquetaResult = temResult
+    ? `<span class="tag" style="background:#EAF5EF;border-color:var(--green);color:var(--green-dark)">✓ Com resultado</span>`
+    : `<span class="tag cinza">Sem resultado registrado</span>`;
 
   return `<article>
     <div class="canhoto"><span>${esc(it.numero_controle_pncp||"PNCP")}</span></div>
@@ -2553,14 +2537,13 @@ function cardBuscaPreco(it, termo){
       <div class="tags">
         ${it.modalidade_licitacao_nome?`<span class="tag">${esc(it.modalidade_licitacao_nome)}</span>`:""}
         ${it.uf?`<span class="tag cinza">${esc(it.uf)}</span>`:""}
-        ${etiquetaQual}
+        ${etiquetaResult}
       </div>
       <p class="objeto">${esc((it.description||"").slice(0,240))}</p>
       <div class="detalhes">
         ${it.orgao_nome?`<div><b>Órgão:</b> ${esc(it.orgao_nome)}</div>`:""}
         ${local?`<div><b>Local:</b> ${esc(local)}</div>`:""}
       </div>
-      ${avisoSemCorrespondencia}
       <div class="rodape-card" style="margin-top:8px">
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           ${coord?`<button class="btn-itens" onclick="abrirItensPreco(this,'${coord.cnpj}','${coord.ano}','${coord.seq}','${idItens}')">Ver itens e adicionar preços</button>`:""}
@@ -2649,8 +2632,16 @@ function renderItensPreco(itens, cnpj, ano, seq){
   const combinam = termoBusca ? uteis.filter(it=> combinaComSinonimos(it.descricao||"", termoBusca)) : uteis;
   const outros   = termoBusca ? uteis.filter(it=>!combinaComSinonimos(it.descricao||"", termoBusca)) : [];
 
-  // Aviso de falsa correspondência já está no card da lista (antes de abrir os itens)
-  const avisoFalsaCorrespondencia = "";
+  // Aviso de falsa correspondência — aparece dentro da expansão, baseado em dados reais
+  const avisoFalsaCorrespondencia = termoBusca && combinam.length === 0
+    ? `<div style="background:#FBF3E3;border-left:3px solid var(--amber);padding:10px 14px;
+        margin-bottom:10px;font-size:13px;color:var(--ink);border-radius:0 6px 6px 0">
+        Esta contratação não tem itens com o nome <b>"${esc(termoBusca)}"</b>, mas apareceu na busca porque
+        o motor de pesquisa do PNCP encontrou esse termo no texto do edital ou em outros campos do processo.
+        Muitas licitações mencionam o produto no objeto geral sem cadastrá-lo como item separado.
+        Se quiser verificar se há algo comparável, abra o edital pelo link "Ver no PNCP" e confira o Termo de Referência.
+      </div>`
+    : "";
 
   const renderLinha = (it,idx,destaque)=>{
     const desc = it.descricao||"(sem descrição)";
@@ -2704,9 +2695,18 @@ function renderItensPreco(itens, cnpj, ano, seq){
   const linhasCombinam = combinam.map((it,idx)=>renderLinha(it,idx,true)).join("");
   const linhasOutros   = outros.map((it,idx)=>renderLinha(it,idx,false)).join("");
 
+  const idOutros = `outros-${cnpj}-${seq}`;
   const secaoOutros = outros.length > 0 ? `
     <tr><td colspan="3" style="padding:10px 8px 4px;font-size:12px;font-weight:600;color:var(--ink-soft);
-      border-top:1.5px dashed var(--line);cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none';this.textContent=this.textContent.includes('▶')?this.textContent.replace('▶','▼'):this.textContent.replace('▼','▶')">
+      border-top:1.5px dashed var(--line);cursor:pointer;user-select:none"
+      id="toggle-outros-${cnpj}-${seq}"
+      onclick="(function(id){
+        var tb=document.getElementById(id);
+        var tog=document.getElementById('toggle-'+id);
+        var aberto=tb.style.display!=='none';
+        tb.style.display=aberto?'none':'';
+        tog.textContent=(aberto?'\u25BA':'\u25BC')+' Outros itens desta contratação (${outros.length}) \u2014 clique para expandir';
+      })('outros-${cnpj}-${seq}')">
       ▶ Outros itens desta contratação (${outros.length}) — clique para expandir
     </td></tr>
     <tbody id="outros-${cnpj}-${seq}" style="display:none">${linhasOutros}</tbody>` : "";
