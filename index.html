@@ -108,7 +108,16 @@
   .preco-add{font-size:13px;font-weight:600;color:#fff;background:var(--green);border:none;
     border-radius:6px;padding:6px 14px;cursor:pointer}
   .preco-add:disabled{background:var(--ink-soft);cursor:default}
-  .preco-add.preco-estimado{background:var(--ink-soft)}
+  .preco-add.preco-estimado-btn{background:var(--ink-soft)}
+
+  /* Dois valores lado a lado na tabela de itens de preços */
+  .preco-estimado-label{margin-bottom:4px}
+  .preco-homolog-label{margin-top:2px}
+  .preco-rot{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;display:block;color:var(--ink-soft)}
+  .preco-val-cinza{font-family:var(--mono);font-size:13px;color:var(--ink-soft)}
+  .preco-val-verde{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--green-dark)}
+  .preco-data{font-size:11px;color:var(--green-dark);margin-top:1px}
+  .preco-forn{font-size:11px;color:var(--ink-soft);margin-top:1px;max-width:220px;line-height:1.3}
   .cesta-tabela{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
   .cesta-tabela th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;
     color:var(--ink-soft);padding:6px 8px;border-bottom:1.5px solid var(--line)}
@@ -1601,9 +1610,10 @@ async function abrirItensPreco(botao, cnpj, ano, seq, idArea){
   if(!area.hidden){ area.hidden=true; botao.textContent="Ver itens e adicionar preços"; return; }
   area.hidden=false; botao.textContent="Ocultar itens";
   const chave = `${cnpj}/${ano}/${seq}`;
-  // No modo "somente homologados", invalida cache para sempre rebuscar com resultados
-  const modoHomolog = $("pFiltroPreco").value === "homologado";
-  if(cachePItens[chave] && !modoHomolog){ area.innerHTML = renderItensPreco(cachePItens[chave], cnpj, ano, seq); return; }
+  // Sempre rebusca para garantir que os resultados homologados estejam pré-carregados
+  if(cachePItens[chave]?._resultadosPrebuscados){
+    area.innerHTML = renderItensPreco(cachePItens[chave], cnpj, ano, seq); return;
+  }
   area.innerHTML = `<div class="itens-carregando">Carregando itens…</div>`;
   try{
     const r = await fetch(`https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/itens`, { headers:{accept:"application/json"} });
@@ -1612,27 +1622,26 @@ async function abrirItensPreco(botao, cnpj, ano, seq, idArea){
     cachePItens[chave] = Array.isArray(itens)?itens:[];
     cachePItens[chave]._meta = metaDaBusca(cnpj, ano, seq);
 
-    // No modo somente homologados, pré-busca os resultados de todos os itens com resultado
-    if(modoHomolog){
-      const comResult = cachePItens[chave].filter(it=>it.temResultado===true);
-      if(comResult.length>0){
-        area.innerHTML = `<div class="itens-carregando">Buscando preços homologados (${comResult.length} item(ns))…</div>`;
-        await Promise.all(comResult.map(async it=>{
-          try{
-            const rr = await fetch(
-              `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/itens/${it.numeroItem}/resultados`,
-              {headers:{accept:"application/json"}}
-            );
-            if(!rr.ok) return;
-            const resultados = await rr.json();
-            const ativos = (Array.isArray(resultados)?resultados:[])
-              .filter(res=>!res.dataCancelamento && res.valorUnitarioHomologado!=null)
-              .sort((a,b)=>a.ordemClassificacaoSrp-b.ordemClassificacaoSrp);
-            if(ativos.length>0) it._resultadoHomologado = ativos[0];
-          }catch{ /* ignora erros individuais de resultado */ }
-        }));
-      }
+    // Pré-busca resultados de TODOS os itens com resultado (sempre, não só no modo homologado)
+    const comResult = cachePItens[chave].filter(it=>it.temResultado===true);
+    if(comResult.length>0){
+      area.innerHTML = `<div class="itens-carregando">Buscando preços homologados (${comResult.length} item(ns))…</div>`;
+      await Promise.all(comResult.map(async it=>{
+        try{
+          const rr = await fetch(
+            `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/itens/${it.numeroItem}/resultados`,
+            {headers:{accept:"application/json"}}
+          );
+          if(!rr.ok) return;
+          const resultados = await rr.json();
+          const ativos = (Array.isArray(resultados)?resultados:[])
+            .filter(res=>!res.dataCancelamento && res.valorUnitarioHomologado!=null)
+            .sort((a,b)=>a.ordemClassificacaoSrp-b.ordemClassificacaoSrp);
+          if(ativos.length>0) it._resultadoHomologado = ativos[0];
+        }catch{ /* ignora erros individuais */ }
+      }));
     }
+    cachePItens[chave]._resultadosPrebuscados = true; // marca como pré-buscado
 
     area.innerHTML = renderItensPreco(cachePItens[chave], cnpj, ano, seq);
   }catch(e){
@@ -1648,79 +1657,81 @@ function metaDaBusca(cnpj, ano, seq){
 }
 
 function renderItensPreco(itens, cnpj, ano, seq){
-  if(!itens || itens.length===0) return `<div class="itens-carregando">Esta contratação não tem itens cadastrados.</div>`;
+  if(!itens || itens.length===0)
+    return `<div class="itens-carregando">Esta contratação não tem itens cadastrados.</div>`;
   const termo = semAcento($("pBusca").value.trim());
-
-  // Só mostra itens com valor útil: estimado > 0 OU tem resultado homologado
   const somentHomolog = $("pFiltroPreco").value === "homologado";
-  const uteis = itens.filter(it=> {
+
+  const uteis = itens.filter(it=>{
     if(it.orcamentoSigiloso === true) return false;
-    if(somentHomolog) return it.temResultado === true;
-    return it.temResultado === true || (it.valorUnitarioEstimado!=null && it.valorUnitarioEstimado > 0);
+    if(somentHomolog) return !!it._resultadoHomologado;
+    const temEstimado = it.valorUnitarioEstimado!=null && it.valorUnitarioEstimado > 0;
+    return !!it._resultadoHomologado || temEstimado;
   });
   const descartados = itens.length - uteis.length;
-
   if(uteis.length===0) return `<div class="itens-carregando">
     Nenhum item com valor disponível nesta contratação
-    ${descartados>0?`(${descartados} item(ns) com orçamento sigiloso ou valor não informado foram omitidos)`:""}.
+    ${descartados>0?`(${descartados} item(ns) omitidos)`:""}.
   </div>`;
 
   const linhas = uteis.map((it,idx)=>{
     const desc = it.descricao||"(sem descrição)";
     const combina = termo && semAcento(desc).includes(termo);
-    const estimadoBruto = it.valorUnitarioEstimado;
-    const estimado = (estimadoBruto != null && estimadoBruto > 0) ? estimadoBruto : null;
-    const orcamentoSigiloso = it.orcamentoSigiloso === true;
-    const temResult = it.temResultado === true;
-    const resPreBuscado = it._resultadoHomologado || null;
-    const idCesta = `${cnpj}-${ano}-${seq}-${it.numeroItem||idx}`;
-    const naCesta = cesta.some(c=> c.id===idCesta);
-    const numItem = it.numeroItem || (idx+1);
+    const estimado = (it.valorUnitarioEstimado!=null && it.valorUnitarioEstimado>0) ? it.valorUnitarioEstimado : null;
+    const res = it._resultadoHomologado || null;
+    const valorHom = res?.valorUnitarioHomologado ?? null;
+    const dataHom  = res?.dataResultado ?? null;
+    const fornHom  = res?.nomeRazaoSocialFornecedor ?? null;
+    const idCesta  = `${cnpj}-${ano}-${seq}-${it.numeroItem||idx}`;
+    const naCesta  = cesta.some(c=>c.id===idCesta);
+    const numItem  = it.numeroItem || (idx+1);
 
-    // Valor e data a exibir — usa pré-buscado se disponível
-    const valorHom = resPreBuscado?.valorUnitarioHomologado ?? null;
-    const dataHom  = resPreBuscado?.dataResultado ?? null;
-    const fornHom  = resPreBuscado?.nomeRazaoSocialFornecedor ?? null;
+    // Dois valores lado a lado com hierarquia visual
+    let colunaValor = "";
+    if(estimado!=null){
+      colunaValor += `<div class="preco-estimado-label">
+        <span class="preco-rot">Estimado</span>
+        <span class="preco-val-cinza">${brl(estimado)}</span>
+      </div>`;
+    }
+    if(valorHom!=null){
+      colunaValor += `<div class="preco-homolog-label">
+        <span class="preco-rot" style="color:var(--green-dark)">Homologado</span>
+        <span class="preco-val-verde">${brl(valorHom)}</span>
+        ${dataHom?`<div class="preco-data">${dataBR(dataHom)}</div>`:""}
+        ${fornHom?`<div class="preco-forn">${esc(fornHom)}</div>`:""}
+      </div>`;
+    }
+    if(!estimado && !valorHom) colunaValor = `<span class="item-situacao">sem resultado</span>`;
 
+    // Botão usa homologado como padrão
     let btnHtml = "—";
-    if(temResult || estimado!=null){
-      const label = naCesta ? "✓ Na cesta"
-        : resPreBuscado ? `+ Cesta (${brl(valorHom)})`
-        : temResult ? "+ Cesta (homologado)" : "+ Cesta (estimado)";
-      const cls = `preco-add ${naCesta?"naCesta":""} ${!temResult&&!naCesta?"preco-estimado":""}`;
+    if(res || estimado!=null){
+      const label = naCesta ? "✓ Na cesta" : res ? "+ Cesta" : "+ Cesta (estimado)";
+      const cls = `preco-add ${naCesta?"naCesta":""} ${!res&&!naCesta?"preco-estimado-btn":""}`;
+      const title = res ? `Adicionar ${brl(valorHom)} homologado` : `Adicionar ${brl(estimado)} estimado`;
       btnHtml = `<button class="${cls}" id="add-${idCesta}"
-        onclick="addCestaComResultado('${idCesta}','${cnpj}','${ano}','${seq}','${numItem}',${temResult})"
+        title="${title}"
+        onclick="addCestaComResultado('${idCesta}','${cnpj}','${ano}','${seq}','${numItem}',${it.temResultado===true})"
         >${label}</button>`;
     }
 
-    // Coluna de valor estimado
-    const valorExibido = orcamentoSigiloso ? "sigiloso"
-      : estimado!=null ? brl(estimado) : "não informado";
-    const labelValor = temResult && !resPreBuscado
-      ? `${valorExibido} <span class="item-situacao" style="color:var(--green-dark)">estimado · clique p/ homologado</span>`
-      : `${valorExibido} <span class="item-situacao" style="color:var(--ink-soft)">${orcamentoSigiloso?"(orçamento sigiloso)":"sem resultado"}</span>`;
-
-    // Coluna de resultado homologado (pré-buscado ou preenchida ao clicar)
-    const resInicialHtml = resPreBuscado
-      ? `<b style="color:var(--green-dark)">${brl(valorHom)}</b>`+
-        `${dataHom?` · <b>${dataBR(dataHom)}</b>`:""}${fornHom?`<br><span style="font-size:11px">${esc(fornHom)}</span>`:""}`
-      : "";
-
     return `<tr class="${combina?"destaque":""}">
       <td>${esc(desc)}${it.unidadeMedida?`<div class="item-situacao">${esc(it.unidadeMedida.trim())}</div>`:""}</td>
-      <td style="text-align:right" class="item-unit">${resPreBuscado ? "—" : labelValor}</td>
-      <td style="text-align:right">${btnHtml}</td>
-      <td id="res-${idCesta}" style="font-size:12px;color:var(--ink-soft)">${resInicialHtml}</td>
+      <td style="vertical-align:top">${colunaValor}</td>
+      <td style="text-align:right;vertical-align:top">${btnHtml}</td>
     </tr>`;
   }).join("");
+
   return `<table class="itens-tabela"><thead><tr>
-    <th>Item</th><th style="text-align:right">Valor unit. estimado</th>
-    <th style="text-align:right">Ação</th><th>Resultado homologado</th></tr></thead>
-    <tbody>${linhas}</tbody></table>
-    <div class="itens-resumo" style="margin-top:6px">
-      <b>Legenda:</b> "homologado" = preço efetivamente pago (recomendado pela IN 65); "estimado" = valor do edital, sem resultado registrado.
-      ${descartados>0?`<br><span style="color:var(--ink-soft)">${descartados} item(ns) omitido(s) por orçamento sigiloso ou valor não informado.</span>`:""}
-    </div>`;
+    <th>Item</th><th>Valores</th><th style="text-align:right">Ação</th>
+  </tr></thead><tbody>${linhas}</tbody></table>
+  <div class="itens-resumo" style="margin-top:6px">
+    <b>Legenda:</b>
+    <span style="color:var(--ink-soft)">Estimado</span> = valor do edital ·
+    <span style="color:var(--green-dark);font-weight:600">Homologado</span> = preço pago (recomendado pela IN 65).
+    ${descartados>0?`<br><span style="color:var(--ink-soft)">${descartados} item(ns) omitido(s) (sigiloso, sem valor ou sem resultado no modo "somente homologados").</span>`:""}
+  </div>`;
 }
 
 // Adiciona à cesta buscando o preço homologado do resultado do item
@@ -1926,14 +1937,11 @@ function gerarPlanilha(){
   const objeto = $("pBusca").value.trim() || "[preencher: descrição do objeto]";
 
   // ── Aba "Série de Preços" ─────────────────────────────
-  // É a aba de dados: cada linha é um preço da cesta.
-  // As fórmulas das outras abas referenciam esta.
-  const S = "Série de Preços"; // nome da aba de dados
-  const LINHA_INI = 3;          // primeira linha de dados (após cabeçalho em linha 2)
+  const S = "Série de Preços";
+  const LINHA_INI = 3; // dados começam na linha 3 (1-indexado)
   const validos = cesta.filter(c=>!c.excluido);
-  const N = validos.length;     // quantidade de preços considerados
+  const N = validos.length;
 
-  // Cabeçalho da série (linha 1 de dados = linha 2 da planilha)
   const cabSerie = ["#","Descrição do item","Valor unit. (R$)","Tipo de preço","Fornecedor/arrematante",
     "Data homologação","UF","Município","Órgão","Nº Controle PNCP","Data publicação edital","Link PNCP","Status","Sinalização outlier"];
 
@@ -1944,85 +1952,90 @@ function gerarPlanilha(){
     c.uf, c.municipio, c.orgao, c.controle,
     c.dataPublicacao?dataBR(c.dataPublicacao):"", c.link,
     c.excluido?"DESCONSIDERADO":"Considerado",
-    c.outlier==="baixo"?"⚠ Possível inexequível (<75% da média)":c.outlier==="alto"?"⚠ Possível excessivo (>125% da média)":"",
+    c.outlier==="baixo"?"Possível inexequível (<75% da média)":c.outlier==="alto"?"Possível excessivo (>125% da média)":"",
   ]);
 
   const wsSerie = XLSX.utils.aoa_to_sheet([["SÉRIE DE PREÇOS — FONTES CONSULTADAS"], cabSerie, ...linhasSerie]);
 
-  // ── Aba "Memória de Cálculo" ──────────────────────────
-  // Linhas de ancoragem para as fórmulas:
-  //   Método escolhido     → célula B4 desta aba (via validação de dados)
-  //   Média                → B6
-  //   Mediana              → B7
-  //   Menor preço          → B8
-  //   Preço estimado final → B10 (fórmula que lê B4 e retorna o valor certo)
+  // ── Aba "Memória de Cálculo" com fórmulas reais ───────
+  // O SheetJS exige células construídas como objetos {t, f, v} para fórmulas.
+  // Referências de coluna na Série de Preços:
+  //   C = Valor unit. | M = Status | N = Sinalização outlier
+  const fim = LINHA_INI + cesta.length - 1;
+  const rC  = `'${S}'!C${LINHA_INI}:C${fim}`;
+  const rM  = `'${S}'!M${LINHA_INI}:M${fim}`;
+  const rN  = `'${S}'!N${LINHA_INI}:N${fim}`;
 
-  // Referências à coluna C da Série de Preços (valores unitários, só os "Considerados")
-  // Usamos AVERAGEIF, MINIFS, e para mediana um array MEDIAN(IF(...))
-  // Referências à Série de Preços:
-  // C = Valor unit. | M = Status (Considerado/DESCONSIDERADO) | N = Sinalização outlier
-  const refColC  = `'${S}'!C${LINHA_INI}:C${LINHA_INI + cesta.length - 1}`;
-  const refColM  = `'${S}'!M${LINHA_INI}:M${LINHA_INI + cesta.length - 1}`; // Status
-  const refColN  = `'${S}'!N${LINHA_INI}:N${LINHA_INI + cesta.length - 1}`; // Sinalização outlier
+  // Célula de fórmula: t='n' (número), f = fórmula SEM o "="
+  // Separador PT-BR = ponto-e-vírgula
+  const F = (formula, val) => ({ t:'n', f: formula, v: val||0 });
+  const T = (str) => ({ t:'s', v: str });
 
-  // Fórmulas em português (Excel BR) — separador ponto-e-vírgula
-  const fMedia   = `=MÉDIASE(${refColM};"Considerado";${refColC})`;
-  const fMenor   = `=MÍNIMOSES(${refColC};${refColM};"Considerado")`;
-  // MED com SE — matricial (Ctrl+Shift+Enter no Excel antigo; automático no 365/2019)
-  const fMediana = `=MED(SE(${refColM}="Considerado";${refColC}))`;
-  // Fórmula principal: SE aninhado que lê o método escolhido em B4
-  const fEstimado = `=SE(B4="Média";B6;SE(B4="Mediana";B7;SE(B4="Menor preço";B8;"escolha o método")))`;
+  // Monta a aba célula a célula usando sheet_add_aoa + células diretas
+  const mem = {};
+  const encode = XLSX.utils.encode_cell;
 
-  // Contagem de outliers sinalizados
-  const fQtdBaixo = `=CONT.SE(${refColN};"*inexequível*")`;
-  const fQtdAlto  = `=CONT.SE(${refColN};"*excessivo*")`;
-
-  const mem = XLSX.utils.aoa_to_sheet([
-    ["MEMÓRIA DE CÁLCULO — Pesquisa de Preços"],                            // A1
-    [],                                                                      // A2
-    ["Objeto da pesquisa:", objeto],                                         // A3
-    ["V. Método estatístico (escolha abaixo ↓):", "Média"],                 // A4  ← célula B4 = lista suspensa
-    [],                                                                      // A5
-    ["Média dos preços considerados:",   fMedia],                            // A6 → B6
-    ["Mediana dos preços considerados:", fMediana],                          // A7 → B7
-    ["Menor preço considerado:",         fMenor],                            // A8 → B8
-    [],                                                                      // A9
-    ["⭐ PREÇO UNITÁRIO ESTIMADO:",       fEstimado],                        // A10 → B10
-    [],
-    ["── Informações sobre a amostra ──"],
+  // Conteúdo em formato de linhas (texto simples via aoa)
+  const dados = [
+    ["MEMÓRIA DE CÁLCULO — Pesquisa de Preços", ""],           // linha 1
+    ["", ""],                                                    // linha 2
+    ["Objeto da pesquisa:", objeto],                             // linha 3
+    ["V. Método estatístico (escolha abaixo ↓):", "Média"],    // linha 4 — B4 = lista suspensa
+    ["", ""],                                                    // linha 5
+    ["Média dos preços considerados:", ""],                      // linha 6 — B6 = fórmula
+    ["Mediana dos preços considerados:", ""],                    // linha 7 — B7 = fórmula
+    ["Menor preço considerado:", ""],                            // linha 8 — B8 = fórmula
+    ["", ""],                                                    // linha 9
+    ["⭐ PREÇO UNITÁRIO ESTIMADO:", ""],                        // linha 10 — B10 = fórmula
+    ["", ""],
+    ["── Informações sobre a amostra ──", ""],
     ["Total de preços na cesta:", cesta.length],
-    [`Total considerados no cálculo:`, N],
-    [`Total desconsiderados:`, cesta.length - N],
-    [`Itens sinalizados como possível inexequível:`, fQtdBaixo],
-    [`Itens sinalizados como possível excessivo:`, fQtdAlto],
-    [],
-    ["── Critério de outliers (Manual STJ / IN 65) ──"],
+    ["Total considerados no cálculo:", N],
+    ["Total desconsiderados:", cesta.length - N],
+    ["Itens sinalizados como possível inexequível:", ""],        // linha 16 — B16 = fórmula
+    ["Itens sinalizados como possível excessivo:", ""],          // linha 17 — B17 = fórmula
+    ["", ""],
+    ["── Critério de outliers (Manual STJ / IN 65) ──", ""],
     ["Inexequível:", "Valor < 75% da média dos demais preços"],
     ["Excessivamente elevado:", "Valor > 125% da média dos demais preços"],
     ["Ressalva:", "Preços de atas/contratos já executados não se presumem inexequíveis."],
     ["Referência legal:", "Art. 6º, §1º e §2º, IN SEGES/ME 65/2021 · Manual STJ 4ª ed."],
-    [],
-    ["── Fonte dos preços ──"],
+    ["", ""],
+    ["── Fonte dos preços ──", ""],
     ["Parâmetro utilizado:", "Contratações similares de órgãos públicos (PNCP)"],
     ["Base legal:", "Art. 5º, II, IN SEGES/ME 65/2021 (parâmetro preferencial)"],
     ["Data da pesquisa:", hoje],
-  ]);
+  ];
+  XLSX.utils.sheet_add_aoa(mem, dados, {origin:"A1"});
+  mem["!ref"] = XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:dados.length-1,c:1}});
 
-  // Validação de dados em B4: lista suspensa Média / Mediana / Menor preço
-  if(!mem["!dataValidation"]) mem["!dataValidation"] = [];
-  mem["!dataValidation"].push({
+  // Substitui as células de fórmula (linhas são 0-indexadas no SheetJS)
+  // B6 = Média
+  mem["B6"] = F(`MÉDIASE(${rM};"Considerado";${rC})`, calc.media);
+  // B7 = Mediana (matricial)
+  mem["B7"] = F(`MED(SE(${rM}="Considerado";${rC}))`, calc.mediana);
+  // B8 = Menor
+  mem["B8"] = F(`MÍNIMOSES(${rC};${rM};"Considerado")`, calc.menor);
+  // B10 = Preço estimado (depende de B4)
+  mem["B10"] = F(`SE(B4="Média";B6;SE(B4="Mediana";B7;SE(B4="Menor preço";B8;"escolha o método")))`, calc[pMetodo]);
+  // B16 = Qtd inexequíveis
+  mem["B16"] = F(`CONT.SE(${rN};"*inexequível*")`);
+  // B17 = Qtd excessivos
+  mem["B17"] = F(`CONT.SE(${rN};"*excessivo*")`);
+
+  // Validação de dados em B4: lista suspensa
+  mem["!dataValidation"] = [{
     sqref: "B4",
     type: "list",
     formula1: '"Média,Mediana,Menor preço"',
     showDropDown: false,
     showErrorMessage: true,
-    error: "Escolha: Média, Mediana ou Menor preço",
+    error: "Escolha entre: Média, Mediana ou Menor preço",
     errorTitle: "Valor inválido",
-  });
+  }];
 
-  // Formata B10 (preço estimado) em negrito via estilo
-  if(!mem["B10"]) mem["B10"] = {};
-  mem["B10"].s = { font:{ bold:true, sz:14, color:{ rgb:"155843" } } };
+  // Largura das colunas
+  mem["!cols"] = [{wch:45},{wch:55}];
 
   // ── Aba "Identificação" ───────────────────────────────
   const ident = XLSX.utils.aoa_to_sheet([
@@ -2033,7 +2046,7 @@ function gerarPlanilha(){
     ["   Data da pesquisa:", hoje],
     [],
     ["III. Caracterização das fontes:",
-     "Preços obtidos de contratações públicas no PNCP (Portal Nacional de Contratações Públicas). Parâmetro preferencial — art. 5º, II, IN 65/2021."],
+     "Preços obtidos de contratações públicas no PNCP. Parâmetro preferencial — art. 5º, II, IN 65/2021."],
     ["   Quantidade de fontes consultadas (série):", cesta.length],
     ["   Quantidade considerada no cálculo:", N],
     [],
@@ -2044,7 +2057,7 @@ function gerarPlanilha(){
     ["VI. Justificativas:"],
     ["   Escolha do método:", "[preencher: justificar a opção por Média, Mediana ou Menor preço]"],
     ["   Exclusão de preços:", N < cesta.length
-      ? "[preencher: justificar os "+( cesta.length-N)+" preços desconsiderados — outliers, dados inconsistentes, etc.]"
+      ? "[preencher: justificar os "+(cesta.length-N)+" preços desconsiderados]"
       : "Nenhum preço foi desconsiderado."],
     [N < 3 ? "   ⚠ ATENÇÃO:" : "", N < 3
       ? "Pesquisa com menos de 3 preços válidos — exige justificativa da autoridade competente (art. 6º, §2º, IN 65/2021)."
@@ -2052,6 +2065,11 @@ function gerarPlanilha(){
     [],
     ["VII. Memória de cálculo:", "Ver aba 'Memória de Cálculo'"],
   ]);
+  ident["!cols"] = [{wch:40},{wch:80}];
+
+  // Largura das colunas da série
+  wsSerie["!cols"] = [{wch:4},{wch:40},{wch:14},{wch:12},{wch:30},
+    {wch:14},{wch:5},{wch:14},{wch:30},{wch:30},{wch:16},{wch:40},{wch:14},{wch:30}];
 
   // ── Montagem final ────────────────────────────────────
   const wb = XLSX.utils.book_new();
@@ -2062,7 +2080,6 @@ function gerarPlanilha(){
   const nomeArq = `pesquisa_precos_${(objeto.slice(0,30).replace(/[^a-zA-Z0-9]/g,"_"))||"pncp"}.xlsx`;
   XLSX.writeFile(wb, nomeArq);
 }
-
 init();
 </script>
 </body>
