@@ -494,6 +494,933 @@ const esc = (s) => String(s??"").replace(/[&<>"']/g, c =>
   ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const semAcento = (s) => String(s||"").toLowerCase()
   .normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+
+// ── Banco de sinônimos para pesquisa de preços em licitações públicas brasileiras
+// Baseado em CATMAT/CATSER — 305 grupos de equivalência
+const SINONIMOS = [
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO 1 — TECNOLOGIA DA INFORMAÇÃO
+// ══════════════════════════════════════════════════════════════════
+
+// Computadores
+["notebook","laptop","computador portátil","microcomputador portátil","microcomputador móvel",
+ "computador móvel","estação móvel","note","ultrabook","netbook","computador notebook",
+ "microcomputador laptop","equipamento notebook","estação de trabalho portátil"],
+
+["desktop","computador desktop","microcomputador desktop","computador de mesa",
+ "workstation desktop","computador fixo","microcomputador fixo","computador pessoal",
+ "pc desktop","cpu desktop","gabinete desktop","torre desktop"],
+
+["workstation","estação de trabalho","workstation profissional","computador workstation",
+ "estação gráfica","estação de engenharia","computador profissional"],
+
+["all in one","computador all in one","tudo em um","computador tudo em um",
+ "microcomputador all in one","pc all in one","aio"],
+
+["servidor","servidor de rede","servidor rack","servidor torre","servidor blade",
+ "servidor de arquivos","servidor web","servidor de dados","servidor de aplicações",
+ "servidor físico","equipamento servidor"],
+
+["tablet","tablete","computador tablet","tablet android","tablet ios","ipad",
+ "dispositivo tablet","computador tela touch","tablet educacional"],
+
+["chromebook","computador chromebook","notebook chromebook","laptop chromebook"],
+
+// Monitores e displays
+["monitor","monitor de vídeo","tela","display","monitor lcd","monitor led",
+ "monitor full hd","monitor 4k","tela de computador","monitor computador",
+ "monitor uhd","monitor qhd","vídeo monitor"],
+
+["monitor touch","tela touch","touchscreen","monitor touchscreen","tela sensível ao toque",
+ "monitor tela touch","display touch","painel touch"],
+
+["tv","televisor","televisão","tv led","tv 4k","tv smart","smart tv",
+ "televisor led","monitor tv","painel televisor"],
+
+["projetor","projetor multimídia","projetor de slides","datashow","data show",
+ "projetor lcd","projetor dlp","projetor laser","retroprojetor digital",
+ "equipamento projetor","projetor portátil"],
+
+["tela de projeção","tela para projetor","tela de projeção retrátil",
+ "tela projeção","tela retrátil projeção"],
+
+// Periféricos de entrada
+["teclado","teclado usb","teclado abnt2","teclado sem fio","teclado wireless",
+ "teclado bluetooth","teclado computador","teclado padrão","teclado mecânico"],
+
+["mouse","mouse óptico","mouse usb","mouse sem fio","mouse wireless",
+ "mouse bluetooth","mouse laser","dispositivo apontador","mouse ergonômico"],
+
+["teclado e mouse","kit teclado e mouse","conjunto teclado mouse",
+ "combo teclado mouse","kit periférico"],
+
+["webcam","câmera web","câmera usb","câmera para computador","câmera de vídeo usb",
+ "web cam","câmera videoconferência","câmera digital usb"],
+
+["scanner","digitalizador","digitalizador de documentos","scanner de mesa",
+ "scanner portátil","scanner de rede","digitalizador scanner"],
+
+["mesa digitalizadora","tablet digitalizador","mesa gráfica","digitalizador gráfico",
+ "wacom","tablet gráfico"],
+
+["leitor de código de barras","leitor código barras","leitor barras","scanner código barras",
+ "coletora de dados","leitor qr code","leitor código qr"],
+
+["leitor biométrico","leitor digital","leitor de impressão digital","biométrico",
+ "leitor biometria","identificador biométrico"],
+
+["cartão de memória","memory card","cartão sd","cartão micro sd","cartão sdhc",
+ "cartão sdxc","flash card"],
+
+// Armazenamento
+["pen drive","pendrive","pen-drive","usb drive","memória usb","flash drive",
+ "unidade flash usb","unidade usb","dispositivo usb armazenamento"],
+
+["hd externo","disco rígido externo","hd externo usb","disco externo",
+ "unidade de disco externo","armazenamento externo","hdd externo"],
+
+["hd interno","disco rígido","disco rígido interno","hdd","hard disk",
+ "hard drive","unidade de disco rígido"],
+
+["ssd","solid state drive","drive ssd","disco ssd","unidade ssd",
+ "armazenamento ssd","ssd interno","ssd externo"],
+
+["pendrive bootável","pen drive bootável","mídia bootável","disco de boot"],
+
+// Componentes
+["memória ram","memória","módulo de memória","pente de memória","memória ddr",
+ "memória ddr4","memória ddr5","ram","módulo ram","memória dimm","memória sodimm"],
+
+["processador","cpu","microprocessador","chip processador","processador intel",
+ "processador amd","processador core i5","processador core i7","processador ryzen"],
+
+["placa de vídeo","gpu","placa gráfica","placa de video","placa gráfica dedicada",
+ "acelerador gráfico","vga"],
+
+["placa mãe","motherboard","placa principal","placa-mãe"],
+
+["fonte de alimentação","fonte atx","fonte computador","fonte pc","fonte de energia pc"],
+
+["cooler","dissipador","cooler processador","refrigeração processador","fan cooler"],
+
+// Impressão e digitalização
+["impressora","impressora laser","impressora jato de tinta","impressora inkjet",
+ "impressora colorida","impressora monocromática","impressora a laser","impressora usb"],
+
+["impressora multifuncional","multifuncional","mfp","multifuncional laser",
+ "multifuncional jato de tinta","impressora copiadora scanner","all in one impressora",
+ "impressora scanner copiadora","equipamento multifuncional"],
+
+["impressora de etiquetas","impressora etiquetas","impressora térmica etiquetas",
+ "impressora zebra","impressora código barras"],
+
+["impressora matricial","impressora ponto a ponto","impressora fiscal",
+ "impressora de cupom","impressora cupom fiscal"],
+
+["plotter","impressora plotter","impressora de grande formato","impressora a0",
+ "impressora a1","impressora plantas"],
+
+["copiadora","copiadora digital","fotocopiadora","máquina de cópia",
+ "equipamento de cópia","xerox","copiadora laser"],
+
+["toner","cartucho toner","cartucho de toner","toner laser","suprimento laser",
+ "refil toner","suprimento impressora laser","kit toner"],
+
+["cartucho","cartucho de tinta","cartucho inkjet","cartucho impressora",
+ "suprimento impressora jato","refil de tinta","cartucho colorido","cartucho preto"],
+
+["fita impressora","ribbon","fita de impressão","ribbon impressora",
+ "fita matricial","fita impressora matricial"],
+
+// Energia e proteção elétrica
+["nobreak","no-break","no break","ups","fonte ininterrupta","sei",
+ "sistema de energia ininterrupta","estabilizador nobreak","nobreak senoidal"],
+
+["estabilizador","estabilizador de tensão","estabilizador de energia",
+ "regulador de tensão","regulador de voltagem","estabilizador automático"],
+
+["filtro de linha","filtro de energia","régua de tomadas","protetor de surto",
+ "filtro de tomada","filtro elétrico"],
+
+// Rede e comunicação
+["switch","switch de rede","comutador de rede","switch ethernet","switch gerenciável",
+ "switch não gerenciável","switch poe","switch 24 portas","switch 48 portas"],
+
+["roteador","router","roteador wireless","roteador wifi","roteador sem fio",
+ "roteador banda larga","gateway","roteador empresarial"],
+
+["access point","ponto de acesso","ap","access point wireless","ponto de acesso wifi",
+ "rádio access point","antena access point"],
+
+["firewall","appliance firewall","equipamento firewall","utm","next generation firewall",
+ "ngfw","firewall de rede"],
+
+["modem","modem adsl","modem cable","modem 4g","modem 3g","modem roteador"],
+
+["cabo de rede","cabo ethernet","cabo utp","cabo cat5","cabo cat5e","cabo cat6",
+ "cabo cat6a","cabo cat7","patch cord","cabo de conexão rede"],
+
+["rack","rack de rede","rack servidor","armário rack","gabinete rack",
+ "rack 19 polegadas","rack para servidores"],
+
+["patch panel","painel de conexão","painel de distribuição de rede"],
+
+["fibra óptica","cabo de fibra óptica","cabo fo","fibra monomodo","fibra multimodo"],
+
+["switch fibra","switch sfp","switch conversor fibra","conversor de mídia"],
+
+// Telefonia e comunicação
+["telefone","aparelho telefônico","telefone fixo","telefone de mesa",
+ "aparelho de telefone","ramal telefônico","telefone voip","ip phone"],
+
+["celular","smartphone","telefone celular","aparelho celular","telefone móvel",
+ "dispositivo móvel","aparelho smartphone"],
+
+["rádio comunicador","rádio","walkie talkie","radio ht","rádio portátil",
+ "transceptor","rádio bidirecional","rádio digital"],
+
+["headset","fone de ouvido com microfone","headphone","fone headset",
+ "auricular com microfone","fone microfone","headset usb","headset bluetooth"],
+
+["sistema de videoconferência","videoconferência","equipamento videoconferência",
+ "kit videoconferência","câmera videoconferência","codec videoconferência"],
+
+["central telefônica","pabx","ip pbx","central voip","sistema de telefonia",
+ "ramal telefônico","central de ramais"],
+
+// Software e licenças
+["licença software","licença de software","software","licença","licença de uso",
+ "licença perpétua","subscrição software","assinatura software"],
+
+["antivírus","anti-vírus","antivirus","software antivírus","solução antivírus",
+ "proteção antivírus","endpoint protection","endpoint security"],
+
+["sistema operacional","so","windows","linux","sistema operacional windows",
+ "licença windows","licença so"],
+
+["pacote office","microsoft office","suite office","licença office","ms office",
+ "office 365","microsoft 365"],
+
+["software de backup","solução de backup","sistema de backup","ferramenta backup"],
+
+// Segurança eletrônica
+["câmera de segurança","cctv","câmera ip","câmera de vigilância","câmera dome",
+ "câmera bullet","câmera speed dome","câmera de monitoramento"],
+
+["dvr","nvr","gravador de vídeo","gravador digital","gravador de imagens",
+ "sistema de gravação","servidor de gravação"],
+
+["sistema de alarme","alarme","sistema de segurança eletrônica","central de alarme",
+ "sensor de presença","sensor de movimento"],
+
+["controle de acesso","sistema de controle de acesso","catraca","torniquete",
+ "cancela","leitor de acesso","terminal de acesso"],
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO 2 — MATERIAL HOSPITALAR E MÉDICO
+// ══════════════════════════════════════════════════════════════════
+
+// EPI e proteção
+["luva","luva descartável","luva látex","luva nitrílica","luva cirúrgica",
+ "luva de procedimento","luva de borracha","luva estéril","luva não estéril"],
+
+["máscara","máscara descartável","máscara cirúrgica","máscara pff2","máscara n95",
+ "máscara de proteção","respirador","máscara hospitalar"],
+
+["avental","avental cirúrgico","avental descartável","capote","jaleco descartável",
+ "avental de proteção","avental hospitalar"],
+
+["óculos de proteção","protetor ocular","óculos epi","óculos segurança","viseira"],
+
+["touca","touca cirúrgica","touca descartável","protetor capilar","gorro descartável"],
+
+["propé","propé descartável","protetor de calçado","sapatilha descartável"],
+
+// Materiais descartáveis
+["seringa","seringa descartável","seringa de plástico","seringa 1ml","seringa 3ml",
+ "seringa 5ml","seringa 10ml","seringa 20ml","seringa 60ml"],
+
+["agulha","agulha descartável","agulha hipodérmica","agulha de injeção",
+ "agulha endovenosa","agulha intramuscular"],
+
+["scalp","butterfly","agulha scalp","equipo scalp","dispositivo scalp"],
+
+["equipo","equipo de soro","equipo de infusão","equipo macrogotas","equipo microgotas",
+ "equipo de transfusão","equipo fotossensível"],
+
+["jelco","cateter venoso","cateter jelco","cateter periférico","abocath",
+ "cateter intravenoso periférico"],
+
+["cateter","cateter venoso central","cvc","cateter de pressão","cateter duplo lúmen"],
+
+["sonda","sonda vesical","sonda foley","sonda nasogástrica","sonda nasoenteral",
+ "sonda enteral","sonda uretral"],
+
+["gaze","gaze cirúrgica","gaze estéril","curativo de gaze","compressa de gaze",
+ "gaze parafinada","compressa cirúrgica"],
+
+["algodão","algodão hidrófilo","algodão cirúrgico","mecha de algodão",
+ "algodão rolo","bola de algodão"],
+
+["atadura","atadura de crepe","atadura elástica","bandagem","atadura de gesso",
+ "atadura de algodão"],
+
+["esparadrapo","fita adesiva cirúrgica","micropore","fita microporosa",
+ "fixador cirúrgico","fita médica"],
+
+["curativo","curativo adesivo","band-aid","curativo cirúrgico","curativo oclusivo",
+ "cobertura para curativo","band aid"],
+
+["luva de procedimento","luva não estéril","luva de exame","luva descartável procedimento"],
+
+// Equipamentos médicos
+["oxímetro","oxímetro de pulso","saturômetro","monitor de saturação",
+ "medidor de saturação","pulsioxímetro"],
+
+["termômetro","termômetro digital","termômetro clínico","termômetro infravermelho",
+ "termômetro timpânico","termômetro oral","aferidor de temperatura"],
+
+["esfigmomanômetro","aparelho de pressão","medidor de pressão arterial",
+ "tensiômetro","monitor de pressão","esfigmo","aparelho pressão arterial"],
+
+["estetoscópio","estetoscópio clínico","estetoscópio duplo","fonendoscópio"],
+
+["nebulizador","inalador","aparelho de nebulização","nebulizador ultrassônico",
+ "inalador nebulizador","equipamento de nebulização"],
+
+["aspirador","aspirador cirúrgico","aspirador de secreção","aspirador portátil",
+ "bomba de aspiração","aspirador mucoso"],
+
+["bomba de infusão","bomba infusora","bomba seringa","equipo de bomba",
+ "infusor volumétrico","bomba volumétrica"],
+
+["desfibrilador","dea","desfibrilador externo automático","cardioversor",
+ "choque elétrico cardíaco"],
+
+["eletrocardiógrafo","ecg","eletrocardiograma","monitor cardíaco","aparelho de ecg"],
+
+["ventilador pulmonar","respirador","ventilador mecânico","respirador mecânico",
+ "suporte ventilatório"],
+
+["cama hospitalar","leito hospitalar","cama articulada","cama fawler",
+ "cama de hospital","cama elétrica hospitalar"],
+
+["maca","maca hospitalar","maca de transporte","maca de atendimento",
+ "maca com rodas","maca simples"],
+
+["cadeira de rodas","cadeira rodas","cadeira de roda","cadeira de rodas manual",
+ "cadeira de rodas elétrica"],
+
+["muleta","muleta axilar","muleta canadense","bengala","apoio de marcha"],
+
+["andador","andador de alumínio","andador com rodas","andador hospitalar"],
+
+// Medicamentos (genéricos comuns)
+["soro fisiológico","solução fisiológica","solução salina","cloreto de sódio 0,9%",
+ "sf 0,9%","soro 0,9%","nacl 0,9%"],
+
+["soro glicosado","solução glicosada","glicose 5%","sg 5%","soro glicose"],
+
+["álcool etílico","álcool 70%","álcool etílico 70%","álcool 70","alcool 70%",
+ "álcool etílico hidratado","solução alcoólica"],
+
+["hipoclorito de sódio","água sanitária","alvejante","hipoclorito","sanitizante",
+ "solução de hipoclorito"],
+
+["lubrificante","gel lubrificante","gel condutor","gel para ultrassom"],
+
+// Insumos laboratoriais
+["tubo de coleta","tubo vacutainer","tubo para exame","tubete","vacutainer"],
+
+["lanceta","lanceta de punção","lanceta descartável","agulha lanceta"],
+
+["fita reagente","fita teste glicemia","fita para glicosímetro","tira reagente"],
+
+["glicosímetro","monitor de glicemia","medidor de glicose","glucosímetro",
+ "aparelho de glicemia"],
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO 3 — CONSTRUÇÃO E OBRAS
+// ══════════════════════════════════════════════════════════════════
+
+// Serviços de obra
+["reforma","serviço de reforma","obra de reforma","reforma predial","reforma civil",
+ "serviços de reforma","reforma e manutenção","obra de reforma predial"],
+
+["construção","serviço de construção","obra de construção","construção civil",
+ "edificação","construção predial","serviços de construção"],
+
+["ampliação","obra de ampliação","serviço de ampliação","expansão predial"],
+
+["demolição","serviço de demolição","obra de demolição","serviços de demolição"],
+
+["pintura","serviço de pintura","pintura predial","pintura de parede","pintura interna",
+ "pintura externa","serviços de pintura","pintura e revestimento"],
+
+// Instalações
+["instalação elétrica","serviço elétrico","manutenção elétrica","elétrica",
+ "serviços elétricos","instalações elétricas","obra elétrica"],
+
+["instalação hidráulica","serviço hidráulico","manutenção hidráulica","hidráulica",
+ "serviços hidráulicos","instalações hidráulicas","obra hidráulica"],
+
+["instalação de ar condicionado","instalação de climatização","instalação hvac",
+ "serviço de instalação ar condicionado","manutenção ar condicionado"],
+
+["instalação de rede lógica","cabeamento estruturado","instalação de rede",
+ "cabeamento de rede","instalação lógica","infra rede"],
+
+// Materiais de construção
+["cimento","cimento portland","cimento cp2","cimento cp3","cimento cp5",
+ "cimento comum","argamassa industrializada"],
+
+["areia","areia média","areia grossa","areia fina","areia lavada"],
+
+["brita","brita 1","brita 2","brita 0","pedra brita","pedrisco"],
+
+["tijolo","tijolo cerâmico","tijolo furado","bloco cerâmico","bloco de concreto",
+ "bloco cimento","tijolinho","tijolo maciço"],
+
+["tinta","tinta acrílica","tinta látex","tinta para parede","tinta imobiliária",
+ "tinta pva","tinta esmalte","tinta epóxi"],
+
+["argamassa","argamassa de assentamento","argamassa de revestimento","massa",
+ "reboco","contrapiso"],
+
+["rejunte","rejuntamento","rejunte cimentício","material de rejunte"],
+
+["cerâmica","piso cerâmico","azulejo","revestimento cerâmico","porcelanato",
+ "piso porcelanato","revestimento azulejo"],
+
+["piso","piso vinílico","piso emborrachado","piso de madeira","assoalho",
+ "piso laminado","piso elevado","carpete"],
+
+["forro","forro de gesso","forro mineral","forro de pvc","forro acústico",
+ "forro de madeira"],
+
+["divisória","divisória de vidro","divisória de gesso","parede divisória",
+ "painel divisório","divisória acústica"],
+
+["porta","porta de madeira","porta de aço","porta de vidro","porta de alumínio",
+ "porta de correr","porta de abrir"],
+
+["janela","janela de alumínio","janela de pvc","janela de madeira","janela basculante",
+ "janela de correr","caixilho","esquadria"],
+
+["vidro","vidro temperado","vidro laminado","vidro comum","espelho","vidro reflexivo"],
+
+["impermeabilização","manta asfáltica","impermeabilizante","impermeabilizar",
+ "tratamento impermeável","produto impermeabilizante"],
+
+["estrutura metálica","perfil metálico","viga metálica","coluna metálica",
+ "estrutura em aço","treliça metálica"],
+
+["cobertura","telhado","telha","telha de zinco","telha de fibrocimento","telha cerâmica",
+ "telha metálica","telhamento"],
+
+["calçada","passeio","meio-fio","guia","sarjeta","calçamento"],
+
+["asfalto","pavimentação asfáltica","recapeamento","tapa buraco","reparo asfáltico"],
+
+// Sanitários
+["louça sanitária","vaso sanitário","bacia sanitária","privada","sanitário"],
+
+["lavatório","pia","pia de banheiro","cuba","cuba de embutir"],
+
+["torneira","torneira de banheiro","torneira de cozinha","torneira automática",
+ "torneira de parede","torneira temporizada"],
+
+["chuveiro","chuveiro elétrico","chuveiro a gás","ducha","ducha higiênica"],
+
+["banheiro acessível","wc acessível","adaptação banheiro acessibilidade"],
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO 4 — VEÍCULOS E COMBUSTÍVEL
+// ══════════════════════════════════════════════════════════════════
+
+["veículo","automóvel","carro","veículo automotor","veículo leve","veículo oficial",
+ "veículo de passeio","veículo sedan","hatch"],
+
+["veículo utilitário","utilitário","caminhonete","pickup","veículo utilitário esportivo",
+ "suv","veículo 4x4","veículo de tração"],
+
+["caminhão","caminhão baú","caminhão carroceria","veículo de carga","caminhão médio",
+ "caminhão pesado","caminhão leve"],
+
+["van","van escolar","van passageiro","veículo tipo van","micro-ônibus",
+ "microônibus","van de transporte"],
+
+["ônibus","ônibus urbano","ônibus intermunicipal","veículo ônibus",
+ "ônibus acessível","veículo de transporte coletivo"],
+
+["motocicleta","moto","motociclo","veículo de duas rodas","moto de serviço"],
+
+["ambulância","veículo de emergência","ambulância uti","veículo de resgate",
+ "veículo de atendimento pré-hospitalar"],
+
+["combustível","gasolina","etanol","diesel","combustível automotivo",
+ "abastecimento","diesel s10","gasolina comum","gasolina aditivada"],
+
+["óleo lubrificante","óleo de motor","óleo mineral","óleo sintético",
+ "óleo multigrado","lubrificante veicular"],
+
+["pneu","pneu automotivo","pneu de carro","pneu veicular","pneu radial",
+ "pneu diagonal","câmara de ar"],
+
+["bateria","bateria automotiva","bateria de carro","acumulador","bateria veicular"],
+
+["seguro de veículo","seguro veicular","seguro automotivo","seguro frota",
+ "seguro de automóvel","apólice de seguro veicular"],
+
+["manutenção veicular","manutenção de frota","revisão veicular","revisão preventiva",
+ "manutenção de veículos","serviço de manutenção veicular"],
+
+["lavagem de veículo","lavagem","higienização de veículo","lavagem e higienização"],
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO 5 — SERVIÇOS GERAIS E ADMINISTRATIVOS
+// ══════════════════════════════════════════════════════════════════
+
+// Limpeza e conservação
+["limpeza","serviço de limpeza","serviço de higienização","limpeza e conservação",
+ "limpeza predial","serviços de limpeza","limpeza e zeladoria","conservação e limpeza"],
+
+["zeladoria","zelador","serviço de zeladoria","serviços de zeladoria"],
+
+["copa","serviço de copa","copa e cozinha","copeiragem","serviço de copeiragem",
+ "serviços de copa","serviço de copa e cozinha"],
+
+["auxiliar de serviços gerais","serviços gerais","auxiliar de limpeza",
+ "servente","serviços de apoio"],
+
+// Vigilância e segurança
+["vigilância","vigilância patrimonial","segurança patrimonial","serviço de vigilância",
+ "vigilância armada","segurança armada","vigilante","guarda patrimonial"],
+
+["portaria","serviço de portaria","recepção e portaria","controlador de acesso",
+ "porteiro","serviços de portaria"],
+
+["monitoramento","serviço de monitoramento","monitoramento eletrônico",
+ "monitoramento 24h","central de monitoramento","teleguarda"],
+
+// Recepção e suporte administrativo
+["recepção","serviço de recepção","recepcionista","serviço de recepcionista",
+ "atendimento recepção","serviços de recepção"],
+
+["serviço de motoboy","motoboy","motofrete","serviço de moto","entregador moto"],
+
+// Transporte
+["transporte","serviço de transporte","frete","transporte de cargas",
+ "serviço de frete","transportadora","serviço de cargas"],
+
+["transporte de pessoal","translado","serviço de translado","transporte de funcionários",
+ "serviço de transporte de passageiros","fretamento"],
+
+["taxi","serviço de táxi","serviço de transporte por táxi","locação de veículo com motorista"],
+
+["locação de veículo","locação de carro","aluguel de veículo","aluguel de carro",
+ "locação de frota","locação de automóvel"],
+
+// Mão de obra
+["terceirização","serviço terceirizado","mão de obra terceirizada",
+ "serviços terceirizados","contrato de terceirização"],
+
+["manutenção predial","manutenção e conservação predial","conservação predial",
+ "manutenção de instalações","serviço de manutenção predial"],
+
+// Eventos e treinamento
+["treinamento","capacitação","curso","serviço de treinamento","serviço de capacitação",
+ "qualificação profissional","formação","desenvolvimento profissional"],
+
+["evento","serviço de eventos","organização de evento","apoio a eventos",
+ "realização de evento","produção de evento"],
+
+["coffee break","coffe break","coffee-break","lanche","serviço de alimentação evento",
+ "serviço de buffet","coffee break evento"],
+
+["impressão","serviço de impressão","reprografia","cópia","serviço de reprografia",
+ "serviço de cópia","impressão e cópia"],
+
+// Telecomunicações e internet
+["internet","serviço de internet","link de internet","banda larga","conexão internet",
+ "acesso à internet","link dedicado","link de dados"],
+
+["telefonia","serviço de telefonia","serviço de telecomunicações","linha telefônica",
+ "serviço de voz","plano corporativo telefonia"],
+
+["serviço de streaming","videoconferência","serviço de videoconferência",
+ "webconferência","reunião virtual"],
+
+// Consultorias e serviços técnicos
+["consultoria","serviço de consultoria","assessoria","assessoria técnica",
+ "consultoria técnica","serviços de consultoria"],
+
+["auditoria","serviço de auditoria","auditoria contábil","auditoria fiscal",
+ "auditoria externa","serviços de auditoria"],
+
+["advocacia","serviço jurídico","assessoria jurídica","serviços advocatícios",
+ "representação jurídica"],
+
+["contabilidade","serviço contábil","assessoria contábil","serviços de contabilidade"],
+
+// Mídias e comunicação
+["gráfica","serviço gráfico","impressão gráfica","material gráfico",
+ "confecção gráfica","produção gráfica"],
+
+["publicidade","serviço de publicidade","propaganda","serviços de publicidade",
+ "comunicação institucional","marketing"],
+
+["fotografia","serviço fotográfico","foto","registro fotográfico",
+ "cobertura fotográfica","serviços de fotografia"],
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO 6 — MATERIAL DE ESCRITÓRIO E PAPELARIA
+// ══════════════════════════════════════════════════════════════════
+
+["papel a4","papel sulfite","resma de papel","papel para impressora","papel offset",
+ "papel branco a4","resma a4","folha de papel a4"],
+
+["papel a3","resma a3","papel formato a3","folha a3"],
+
+["envelope","envelope carta","envelope ofício","envelope plástico","envelope timbrado"],
+
+["pasta","pasta arquivo","pasta suspensa","pasta a-z","pasta catálogo",
+ "pasta de plástico","pasta de papelão","pasta com aba"],
+
+["fichário","fichário de argolas","fichário para documentos","pastas fichário"],
+
+["caneta","caneta esferográfica","caneta bic","esferográfica","caneta azul",
+ "caneta preta","caneta vermelha","caneta esfera"],
+
+["lápis","lápis preto","lápis de escrever","lápis grafite","lapiseira"],
+
+["borracha","borracha de apagar","borracha branca","borracha escolar"],
+
+["marca texto","marca-texto","highlighter","marcador fluorescente","marca texto amarelo"],
+
+["caderno","caderno universitário","caderno espiral","bloco de notas","bloco de rascunho",
+ "caderneta","bloco a4"],
+
+["post-it","bloco adesivo","nota adesiva","post it","papel adesivo"],
+
+["grampeador","grampeador de mesa","grampeador elétrico","agrafador"],
+
+["grampo","grampo 26/6","grampo 23/10","grampo para grampeador","caixa de grampos"],
+
+["perfurador","perfurador de papel","furador","perfurador 2 furos","furador de papel"],
+
+["clipe","clip","clipe metálico","prendedor de papel","clip de metal"],
+
+["tesoura","tesoura escolar","tesoura de escritório","tesoura de corte"],
+
+["fita adesiva","durex","fita scotch","fita transparente","fita adesiva larga"],
+
+["cola","cola branca","cola bastão","cola em bastão","adesivo","cola escolar"],
+
+["calculadora","calculadora de mesa","calculadora científica","calculadora financeira"],
+
+["agenda","agenda de mesa","caderneta","organizador","planner"],
+
+["identificador","índice","índice para fichário","separador","etiqueta"],
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO 7 — LIMPEZA E HIGIENE
+// ══════════════════════════════════════════════════════════════════
+
+["álcool gel","alcool gel","álcool em gel","gel álcool","higienizador gel",
+ "álcool 70 gel","gel higienizador","higienizador de mãos"],
+
+["álcool líquido","álcool 70","alcool 70","álcool etílico","álcool etílico 70%",
+ "solução alcoólica 70%"],
+
+["sabão","sabão em pó","detergente em pó","sabão de coco","sabão multiuso"],
+
+["sabonete","sabonete líquido","sabonete barra","sabonete antisséptico",
+ "sabonete bactericida"],
+
+["detergente","detergente líquido","detergente neutro","detergente lava louça",
+ "detergente de cozinha"],
+
+["desinfetante","desinfetante líquido","produto desinfetante","solução desinfetante",
+ "desinfetante hospitalar","germicida","bactericida"],
+
+["multiuso","limpador multiuso","produto multiuso","limpeza multiuso",
+ "limpador de superfícies"],
+
+["desentupidor","destupidor","desentupidor de pia","produto desentupidor"],
+
+["limpador de vidro","limpa vidros","produto limpa vidros","limpeza de vidros",
+ "álcool para vidro"],
+
+["cera de assoalho","cera para piso","encáustica","produto de cera"],
+
+["desodorizador","aromatizante","purificador de ar ambiente","ambientador",
+ "desodorante de ambiente"],
+
+["água sanitária","hipoclorito de sódio","alvejante","cloro doméstico",
+ "solução hipoclorito","sanitizante líquido"],
+
+["paper higiênico","papel higiênico","papel sanitário","papel higiênico folha dupla",
+ "papel higiênico folha simples","higiênico","papel de banheiro"],
+
+["papel toalha","papel toalha interfolhado","toalha de papel","papel toalha rolo",
+ "papel toalha folha dupla","toalha descartável"],
+
+["sabonete líquido para dispenser","refil sabonete","refil de sabonete",
+ "sabonete dispenser","recarga de sabonete"],
+
+["dispenser","dispenser de sabonete","dispenser de papel toalha","dispenser de álcool",
+ "suporte para sabonete","porta sabonete"],
+
+["vassoura","vassourão","vassoura de pelo","vassoura de plástico",
+ "vassoura de varrer","escova de varrer"],
+
+["rodo","rodo de limpeza","rodo de piso","espanador de piso"],
+
+["balde","balde de plástico","balde de limpeza","balde com dosador"],
+
+["mop","mop de piso","mop úmido","mop seco","mop microfibra"],
+
+["pano de limpeza","pano de chão","flanela","pano multiuso","microfibra",
+ "pano de piso","pano de copa"],
+
+["saco de lixo","sacola de lixo","lixeira saco","saco plástico de lixo",
+ "saco de entulho"],
+
+["luva de borracha","luva de limpeza","luva para limpeza","luva de látex doméstica"],
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO 8 — MÓVEIS E UTENSÍLIOS
+// ══════════════════════════════════════════════════════════════════
+
+["cadeira","cadeira giratória","cadeira executiva","cadeira secretária",
+ "cadeira ergonômica","cadeira de escritório","assento giratório","poltrona giratória"],
+
+["cadeira fixa","cadeira sem rodas","cadeira de visita","cadeira para reunião",
+ "cadeira auditório","cadeira universitária"],
+
+["mesa","mesa de escritório","mesa secretária","mesa de trabalho","mesa executiva",
+ "mesa reta","mesa em l","mesa em u"],
+
+["mesa de reunião","mesa para reunião","mesa conference","mesa de conferência",
+ "mesa oval reunião"],
+
+["escrivaninha","mesa de escritório doméstica","mesa de estudo","bancada"],
+
+["armário","armário de escritório","armário para escritório","armário com chave",
+ "armário de aço","roupeiro","armário de vestiário"],
+
+["arquivo","arquivo de aço","arquivo para documentos","arquivo pasta suspensa",
+ "gaveteiro","gaveteiro de aço","arquivo de mesa"],
+
+["estante","estante de aço","prateleira","estante metálica","estante para livros",
+ "rack de livros","estante fechada"],
+
+["sofá","sofa","poltrona","sofá de escritório","conjunto de sofá","sofá de espera",
+ "conjunto estofado"],
+
+["longarina","cadeira longarina","banco longarina","assento longarina","banco de espera",
+ "cadeira de espera","banco para recepção"],
+
+["recepção","balcão de recepção","counter","balcão atendimento","bancada de recepção"],
+
+["locker","roupeiro individual","armário individual","locker de escritório"],
+
+["quadro branco","lousa branca","whiteboard","lousa","quadro de vidro","quadro magnético"],
+
+["quadro negro","lousa negra","quadro verde","lousa escolar"],
+
+["mesa para computador","mesa para notebook","suporte para notebook","suporte notebook"],
+
+["bancada","bancada de trabalho","bancada laboratorial","bancada técnica"],
+
+["frigobar","mini geladeira","refrigerador compacto","geladeira pequena"],
+
+["microondas","micro-ondas","forno micro-ondas","forno microondas"],
+
+["bebedouro","bebedouro de água","bebedouro refrigerado","bebedouro elétrico",
+ "purificador bebedouro","bebedouro de coluna"],
+
+["purificador de água","purificador","filtro de água","purificador de coluna",
+ "purificador bebedouro","filtro purificador"],
+
+["cafeteira","máquina de café","cafeteira elétrica","máquina de café expresso",
+ "cafeteira de pressão"],
+
+["lixeira","cesto de lixo","lixeira de escritório","lixeira com pedal",
+ "lixeira inox","papeleira"],
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO 9 — ELETRODOMÉSTICOS E CLIMATIZAÇÃO
+// ══════════════════════════════════════════════════════════════════
+
+["ar condicionado","ar-condicionado","arcondicionado","ar condicionado split",
+ "split","aparelho de ar condicionado","climatizador","unidade de ar condicionado"],
+
+["ar condicionado janela","ar condicionado de janela","ar condicionado janeleiro",
+ "janeleiro","condicionador de ar janela"],
+
+["ar condicionado central","chiller","fan coil","sistema central de ar",
+ "climatização central"],
+
+["ventilador","ventilador de teto","ventilador de mesa","ventilador de coluna",
+ "circulador de ar","ventilador industrial","ventilador portátil"],
+
+["exaustor","exaustão","exaustor de teto","exaustor de janela","exaustor de banheiro"],
+
+["desumidificador","desumidificador de ar","controlador de umidade"],
+
+["umidificador","umidificador de ar","umidificador ultrassônico"],
+
+["aquecedor","aquecedor de ambiente","aquecedor elétrico","aquecedor a óleo"],
+
+["fogão","fogão industrial","fogão doméstico","cooktop","fogão embutido"],
+
+["forno","forno elétrico","forno combinado","forno industrial","forno convector"],
+
+["geladeira","refrigerador","geladeira frost free","geladeira duplex",
+ "refrigerador doméstico","geladeira doméstica"],
+
+["freezer","congelador","freezer vertical","freezer horizontal","congelador vertical"],
+
+["lavadora","máquina de lavar","lavadora de roupas","máquina de lavar roupa"],
+
+["secadora","secadora de roupas","máquina secadora"],
+
+["lavadora de alta pressão","hidrolavadora","lava jato","lavadora de pressão",
+ "equipamento de alta pressão"],
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO 10 — EPI E SEGURANÇA DO TRABALHO
+// ══════════════════════════════════════════════════════════════════
+
+["capacete","capacete de segurança","capacete epi","capacete de proteção",
+ "capacete obra","capacete industrial"],
+
+["bota de segurança","bota epi","calçado de segurança","bota com biqueira",
+ "bota de borracha","calçado de proteção"],
+
+["colete","colete refletivo","colete de segurança","colete sinalizador",
+ "colete de identificação"],
+
+["cinto de segurança","talabarte","cinto paraquedista","equipamento de proteção contra queda",
+ "cinto de proteção","dispositivo anticida"],
+
+["protetor auricular","protetor de ouvido","abafador de ruído","tampão auricular",
+ "protetor auditivo"],
+
+["óculos de segurança","óculos de proteção","óculos epi","protetor ocular",
+ "viseira de proteção"],
+
+["máscara respiratória","respirador","máscara de proteção respiratória",
+ "respirador semifacial","mascara para poeira"],
+
+["luva de proteção","luva epi","luva de segurança","luva anticorte",
+ "luva antivibração","luva de soldagem"],
+
+["avental de segurança","avental de soldagem","avental de couro","avental epi"],
+
+["extintor","extintor de incêndio","extintor pó abc","extintor co2",
+ "extintor de pó","extintor de espuma"],
+
+["detector de fumaça","detector de incêndio","alarme de incêndio","sensor de fumaça",
+ "sistema de detecção de incêndio"],
+
+["mangueira de incêndio","hidrante","mangueira de combate a incêndio",
+ "sistema de combate a incêndio"],
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO 11 — GÊNEROS ALIMENTÍCIOS
+// ══════════════════════════════════════════════════════════════════
+
+["gêneros alimentícios","alimentos","produtos alimentícios","mantimentos",
+ "gêneros de alimentação","insumos alimentícios"],
+
+["café","café torrado e moído","café solúvel","pó de café","café em grão"],
+
+["açúcar","açúcar refinado","açúcar cristal","açúcar demerara"],
+
+["adoçante","adoçante artificial","adoçante dietético","edulcorante"],
+
+["água mineral","água potável","água mineral natural","água mineral sem gás",
+ "água mineral com gás"],
+
+["leite","leite integral","leite em pó","leite longa vida","leite uas"],
+
+["biscoito","bolacha","biscoito salgado","biscoito doce","biscoito cream cracker"],
+
+["merenda escolar","merenda","alimentação escolar","kit merenda",
+ "gêneros merenda escolar","alimentos merenda"],
+
+["cesta básica","cesta de alimentos","kit alimentar","cesta alimentar"],
+
+// ══════════════════════════════════════════════════════════════════
+// BLOCO 12 — OUTROS EQUIPAMENTOS E MATERIAIS
+// ══════════════════════════════════════════════════════════════════
+
+["gerador","gerador de energia","grupo gerador","gerador a diesel",
+ "gerador elétrico","grupo motogerador"],
+
+["compressor de ar","compressor","compressor de pistão","compressor parafuso",
+ "compressor industrial"],
+
+["bomba d'água","bomba hidráulica","bomba centrífuga","bomba submersível",
+ "motobomba","bomba de recalque"],
+
+["moto","motocicleta","moto de serviço","motociclo","bicicleta motorizada"],
+
+["bicicleta","bike","bicicleta elétrica","bicicleta eletrica","ciclo"],
+
+["balança","balança digital","balança de precisão","balança industrial",
+ "balança comercial","balança rodoviária"],
+
+["microscópio","microscópio óptico","microscópio digital","microscópio eletrônico"],
+
+["livro","livro didático","livro técnico","obra literária","publicação","exemplar"],
+
+["uniforme","farda","camiseta uniformes","calça uniforme","kit uniforme",
+ "roupa de trabalho","vestimenta"],
+
+["banner","faixa","faixa de pano","lona","banner impresso","material gráfico promocional"],
+
+["crachá","identidade funcional","cartão de identificação","identificação funcional"],
+
+["cofre","cofre de segurança","cofre eletrônico","cofre com chave",
+ "cofre de embutir","cofre residencial"],
+
+["condicionador de ar portátil","ar condicionado portátil","split portátil"],
+
+["andaime","andaime tubular","andaime fachadeiro","plataforma de trabalho"],
+
+["escada","escada de alumínio","escada extensível","escada dobrável",
+ "escada de fibra","escada de madeira"],
+];
+// Índice invertido: termo normalizado → índice do grupo
+const _idxSin = new Map();
+SINONIMOS.forEach((grupo,i)=>{
+  grupo.forEach(t=>_idxSin.set(
+    t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,""), i
+  ));
+});
+
+// Expande um termo para todos os sinônimos do seu grupo
+function expandirBusca(termo){
+  const n = termo.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  if(_idxSin.has(n)) return SINONIMOS[_idxSin.get(n)];
+  for(const [e,idx] of _idxSin){
+    if(n.includes(e) || (e.length>=5 && e.includes(n))) return SINONIMOS[idx];
+  }
+  return [termo];
+}
+
+// Verifica se uma descrição combina com um termo (considerando sinônimos)
+function combinaComSinonimos(descricao, termo){
+  const d = descricao.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  return expandirBusca(termo).some(s=>d.includes(
+    s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+  ));
+}
 const parseControle = (nc) => {
   const m = String(nc||"").match(/^(\d{14})-\d-(\d{6})\/(\d{4})$/);
   return m ? { cnpj:m[1], seq:parseInt(m[2],10), ano:m[3] } : null;
@@ -1674,9 +2601,23 @@ function renderItensPreco(itens, cnpj, ano, seq){
     ${descartados>0?`(${descartados} item(ns) omitidos)`:""}.
   </div>`;
 
-  const linhas = uteis.map((it,idx)=>{
+  // Separa em dois grupos usando sinônimos
+  const termoBusca = $("pBusca").value.trim();
+  const combinam = termoBusca ? uteis.filter(it=> combinaComSinonimos(it.descricao||"", termoBusca)) : uteis;
+  const outros   = termoBusca ? uteis.filter(it=>!combinaComSinonimos(it.descricao||"", termoBusca)) : [];
+
+  // Aviso de falsa correspondência (nenhum combina mesmo com sinônimos)
+  const avisoFalsaCorrespondencia = termoBusca && combinam.length === 0
+    ? `<div style="background:#FBF3E3;border:1.5px solid var(--amber);border-radius:8px;padding:10px 14px;
+        margin-bottom:10px;font-size:13px;color:var(--ink)">
+        <b>⚠ Atenção:</b> nenhum item desta contratação corresponde a "<b>${esc(termoBusca)}</b>" (incluindo sinônimos conhecidos).
+        Verifique se algum item abaixo é comparável ao seu objeto antes de adicionar à cesta.
+      </div>`
+    : "";
+
+  const renderLinha = (it,idx,destaque)=>{
     const desc = it.descricao||"(sem descrição)";
-    const combina = termo && semAcento(desc).includes(termo);
+    const combina = destaque;
     const estimado = (it.valorUnitarioEstimado!=null && it.valorUnitarioEstimado>0) ? it.valorUnitarioEstimado : null;
     const res = it._resultadoHomologado || null;
     const valorHom = res?.valorUnitarioHomologado ?? null;
@@ -1721,15 +2662,29 @@ function renderItensPreco(itens, cnpj, ano, seq){
       <td style="vertical-align:top">${colunaValor}</td>
       <td style="text-align:right;vertical-align:top">${btnHtml}</td>
     </tr>`;
-  }).join("");
+  };
 
-  return `<table class="itens-tabela"><thead><tr>
+  const linhasCombinam = combinam.map((it,idx)=>renderLinha(it,idx,true)).join("");
+  const linhasOutros   = outros.map((it,idx)=>renderLinha(it,idx,false)).join("");
+
+  const secaoOutros = outros.length > 0 ? `
+    <tr><td colspan="3" style="padding:10px 8px 4px;font-size:12px;font-weight:600;color:var(--ink-soft);
+      border-top:1.5px dashed var(--line);cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none';this.textContent=this.textContent.includes('▶')?this.textContent.replace('▶','▼'):this.textContent.replace('▼','▶')">
+      ▶ Outros itens desta contratação (${outros.length}) — clique para expandir
+    </td></tr>
+    <tbody id="outros-${cnpj}-${seq}" style="display:none">${linhasOutros}</tbody>` : "";
+
+  return `${avisoFalsaCorrespondencia}<table class="itens-tabela"><thead><tr>
     <th>Item</th><th>Valores</th><th style="text-align:right">Ação</th>
-  </tr></thead><tbody>${linhas}</tbody></table>
+  </tr></thead>
+  <tbody>${linhasCombinam}</tbody>
+  ${secaoOutros}
+  </table>
   <div class="itens-resumo" style="margin-top:6px">
     <b>Legenda:</b>
     <span style="color:var(--ink-soft)">Estimado</span> = valor do edital ·
     <span style="color:var(--green-dark);font-weight:600">Homologado</span> = preço pago (recomendado pela IN 65).
+    ${combinam.length>0&&outros.length>0?`<br><span style="color:var(--ink-soft)">${combinam.length} item(ns) correspondem ao termo buscado · ${outros.length} outro(s) disponível(is) para consulta.</span>`:""}
     ${descartados>0?`<br><span style="color:var(--ink-soft)">${descartados} item(ns) omitido(s) (sigiloso, sem valor ou sem resultado no modo "somente homologados").</span>`:""}
   </div>`;
 }
