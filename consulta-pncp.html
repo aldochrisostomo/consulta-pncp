@@ -359,9 +359,9 @@
     <div class="nota">Preferência legal: contratações públicas (PNCP) são o parâmetro prioritário (art. 5º, II). Atente às peculiaridades regionais quando o objeto for sensível a frete/mão de obra local.</div>
   </div>
 
-  <!-- Objeto da pesquisa -->
+  <!-- Filtros de busca -->
   <section class="filtros" aria-label="Objeto e busca">
-    <label class="campo" style="flex:2"><span>1. O que buscar no PNCP <small>(digite e clique em Buscar)</small></span>
+    <label class="campo" style="flex:2"><span>O que buscar no PNCP <small>(digite e clique em Buscar)</small></span>
       <input type="text" id="pBusca" placeholder="ex.: notebook" style="min-width:240px">
     </label>
     <label class="campo"><span>Esfera <small>(opcional)</small></span>
@@ -376,10 +376,13 @@
     <label class="campo"><span>Região <small>(opcional)</small></span>
       <select id="pUf"></select>
     </label>
-    <button id="pBtnBuscar">🔍 Buscar preços</button>
-    <label class="campo" style="flex:2;width:100%"><span>2. Objeto da pesquisa <small>(descrição p/ o documento — se vazio, usa o termo buscado)</small></span>
-      <input type="text" id="pObjeto" placeholder="ex.: Notebook i5 16GB para uso administrativo" style="min-width:280px">
+    <label class="campo"><span>Preços <small>(tipo)</small></span>
+      <select id="pFiltroPreco">
+        <option value="todos">Todos (estimado e homologado)</option>
+        <option value="homologado">Somente homologados</option>
+      </select>
     </label>
+    <button id="pBtnBuscar">🔍 Buscar preços</button>
   </section>
 
   <div id="pStatusMsg" role="status"></div>
@@ -1598,15 +1601,39 @@ async function abrirItensPreco(botao, cnpj, ano, seq, idArea){
   if(!area.hidden){ area.hidden=true; botao.textContent="Ver itens e adicionar preços"; return; }
   area.hidden=false; botao.textContent="Ocultar itens";
   const chave = `${cnpj}/${ano}/${seq}`;
-  if(cachePItens[chave]){ area.innerHTML = renderItensPreco(cachePItens[chave], cnpj, ano, seq); return; }
+  // No modo "somente homologados", invalida cache para sempre rebuscar com resultados
+  const modoHomolog = $("pFiltroPreco").value === "homologado";
+  if(cachePItens[chave] && !modoHomolog){ area.innerHTML = renderItensPreco(cachePItens[chave], cnpj, ano, seq); return; }
   area.innerHTML = `<div class="itens-carregando">Carregando itens…</div>`;
   try{
     const r = await fetch(`https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/itens`, { headers:{accept:"application/json"} });
     if(!r.ok) throw new Error(`erro ${r.status}`);
     const itens = await r.json();
     cachePItens[chave] = Array.isArray(itens)?itens:[];
-    // guarda metadados da contratação para a cesta
     cachePItens[chave]._meta = metaDaBusca(cnpj, ano, seq);
+
+    // No modo somente homologados, pré-busca os resultados de todos os itens com resultado
+    if(modoHomolog){
+      const comResult = cachePItens[chave].filter(it=>it.temResultado===true);
+      if(comResult.length>0){
+        area.innerHTML = `<div class="itens-carregando">Buscando preços homologados (${comResult.length} item(ns))…</div>`;
+        await Promise.all(comResult.map(async it=>{
+          try{
+            const rr = await fetch(
+              `https://pncp.gov.br/api/pncp/v1/orgaos/${cnpj}/compras/${ano}/${seq}/itens/${it.numeroItem}/resultados`,
+              {headers:{accept:"application/json"}}
+            );
+            if(!rr.ok) return;
+            const resultados = await rr.json();
+            const ativos = (Array.isArray(resultados)?resultados:[])
+              .filter(res=>!res.dataCancelamento && res.valorUnitarioHomologado!=null)
+              .sort((a,b)=>a.ordemClassificacaoSrp-b.ordemClassificacaoSrp);
+            if(ativos.length>0) it._resultadoHomologado = ativos[0];
+          }catch{ /* ignora erros individuais de resultado */ }
+        }));
+      }
+    }
+
     area.innerHTML = renderItensPreco(cachePItens[chave], cnpj, ano, seq);
   }catch(e){
     area.innerHTML = `<div class="itens-carregando">Não foi possível carregar os itens (${esc(e.message)}).</div>`;
@@ -1625,9 +1652,12 @@ function renderItensPreco(itens, cnpj, ano, seq){
   const termo = semAcento($("pBusca").value.trim());
 
   // Só mostra itens com valor útil: estimado > 0 OU tem resultado homologado
-  const uteis = itens.filter(it=>
-    it.temResultado === true || (it.valorUnitarioEstimado!=null && it.valorUnitarioEstimado > 0 && it.orcamentoSigiloso !== true)
-  );
+  const somentHomolog = $("pFiltroPreco").value === "homologado";
+  const uteis = itens.filter(it=> {
+    if(it.orcamentoSigiloso === true) return false;
+    if(somentHomolog) return it.temResultado === true;
+    return it.temResultado === true || (it.valorUnitarioEstimado!=null && it.valorUnitarioEstimado > 0);
+  });
   const descartados = itens.length - uteis.length;
 
   if(uteis.length===0) return `<div class="itens-carregando">
@@ -1638,37 +1668,49 @@ function renderItensPreco(itens, cnpj, ano, seq){
   const linhas = uteis.map((it,idx)=>{
     const desc = it.descricao||"(sem descrição)";
     const combina = termo && semAcento(desc).includes(termo);
-    // Trata 0 e negativo como ausente (orçamento sigiloso ou não preenchido)
     const estimadoBruto = it.valorUnitarioEstimado;
     const estimado = (estimadoBruto != null && estimadoBruto > 0) ? estimadoBruto : null;
     const orcamentoSigiloso = it.orcamentoSigiloso === true;
     const temResult = it.temResultado === true;
+    const resPreBuscado = it._resultadoHomologado || null;
     const idCesta = `${cnpj}-${ano}-${seq}-${it.numeroItem||idx}`;
     const naCesta = cesta.some(c=> c.id===idCesta);
     const numItem = it.numeroItem || (idx+1);
 
-    // Botão: só mostra se tem resultado OU tem valor estimado válido
+    // Valor e data a exibir — usa pré-buscado se disponível
+    const valorHom = resPreBuscado?.valorUnitarioHomologado ?? null;
+    const dataHom  = resPreBuscado?.dataResultado ?? null;
+    const fornHom  = resPreBuscado?.nomeRazaoSocialFornecedor ?? null;
+
     let btnHtml = "—";
     if(temResult || estimado!=null){
-      const label = naCesta ? "✓ Na cesta" : temResult ? "+ Cesta (homologado)" : "+ Cesta (estimado)";
+      const label = naCesta ? "✓ Na cesta"
+        : resPreBuscado ? `+ Cesta (${brl(valorHom)})`
+        : temResult ? "+ Cesta (homologado)" : "+ Cesta (estimado)";
       const cls = `preco-add ${naCesta?"naCesta":""} ${!temResult&&!naCesta?"preco-estimado":""}`;
       btnHtml = `<button class="${cls}" id="add-${idCesta}"
         onclick="addCestaComResultado('${idCesta}','${cnpj}','${ano}','${seq}','${numItem}',${temResult})"
         >${label}</button>`;
     }
 
-    // Valor exibido
+    // Coluna de valor estimado
     const valorExibido = orcamentoSigiloso ? "sigiloso"
       : estimado!=null ? brl(estimado) : "não informado";
-    const labelValor = temResult
+    const labelValor = temResult && !resPreBuscado
       ? `${valorExibido} <span class="item-situacao" style="color:var(--green-dark)">estimado · clique p/ homologado</span>`
       : `${valorExibido} <span class="item-situacao" style="color:var(--ink-soft)">${orcamentoSigiloso?"(orçamento sigiloso)":"sem resultado"}</span>`;
 
+    // Coluna de resultado homologado (pré-buscado ou preenchida ao clicar)
+    const resInicialHtml = resPreBuscado
+      ? `<b style="color:var(--green-dark)">${brl(valorHom)}</b>`+
+        `${dataHom?` · <b>${dataBR(dataHom)}</b>`:""}${fornHom?`<br><span style="font-size:11px">${esc(fornHom)}</span>`:""}`
+      : "";
+
     return `<tr class="${combina?"destaque":""}">
       <td>${esc(desc)}${it.unidadeMedida?`<div class="item-situacao">${esc(it.unidadeMedida.trim())}</div>`:""}</td>
-      <td style="text-align:right" class="item-unit">${labelValor}</td>
+      <td style="text-align:right" class="item-unit">${resPreBuscado ? "—" : labelValor}</td>
       <td style="text-align:right">${btnHtml}</td>
-      <td id="res-${idCesta}" style="font-size:11.5px;color:var(--ink-soft)"></td>
+      <td id="res-${idCesta}" style="font-size:12px;color:var(--ink-soft)">${resInicialHtml}</td>
     </tr>`;
   }).join("");
   return `<table class="itens-tabela"><thead><tr>
@@ -1881,7 +1923,7 @@ function gerarPlanilha(){
   if(!calc){ alert("Adicione ao menos um preço válido."); return; }
   marcarOutliers();
   const hoje = new Date().toLocaleDateString("pt-BR");
-  const objeto = $("pObjeto").value.trim() || $("pBusca").value.trim() || "[preencher: descrição do objeto]";
+  const objeto = $("pBusca").value.trim() || "[preencher: descrição do objeto]";
 
   // ── Aba "Série de Preços" ─────────────────────────────
   // É a aba de dados: cada linha é um preço da cesta.
